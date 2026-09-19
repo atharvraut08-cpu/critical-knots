@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skyfall Evasion — 2D Missile Survival Game</title>
+    <meta name="description" content="Skyfall Evasion: A 2D top-down missile-survival arcade game built with HTML5 Canvas and vanilla JavaScript. Dodge heat-seeking missiles, deploy flares and EMPs, and survive as long as you can.">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0a0a1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            cursor: none;
+        }
+
+        #mobileWarning {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a1e;
+            color: #aabbcc;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            text-align: center;
+            padding: 40px;
+        }
+
+        #mobileWarning h2 {
+            color: #60d5ff;
+            font-size: 24px;
+            margin-bottom: 16px;
+        }
+
+        #mobileWarning p {
+            font-size: 16px;
+            line-height: 1.6;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Risk #4 mitigation: mobile/tablet warning -->
+    <div id="mobileWarning">
+        <h2>🖥️ Desktop + Keyboard Required</h2>
+        <p>
+            Skyfall Evasion requires a desktop browser with a physical keyboard to play.
+            Please visit this page on a desktop computer.
+        </p>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
