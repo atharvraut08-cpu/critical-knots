@@ -72,11 +72,8 @@ export function updatePlayer(player, dt, input) {
     if (input.left) player.heading -= CONFIG.playerTurnRate * dt;
     if (input.right) player.heading += CONFIG.playerTurnRate * dt;
 
-    // ── Fuel Mode Check ─────────────────────────────────
-    const isSurvival = (player.mode || state.gameMode) === 'survival';
-
     // ── Boost ───────────────────────────────────────────
-    player.boosting = input.boost && (!isSurvival || player.fuel > CONFIG.fuelFloorForBoost);
+    player.boosting = !!input.boost;
 
     // Target top speed based on engine throttle/boost
     const targetTopSpeed = player.boosting
@@ -161,19 +158,8 @@ export function updatePlayer(player, dt, input) {
         }
     }
 
-    // ── Fuel Consumption ────────────────────────────────
-    // Only deplete fuel in Survival mode; Free Flight provides infinite fuel
-    if (isSurvival) {
-        const drainMultiplier = player.boosting ? CONFIG.boostFuelDrainMultiplier : 1;
-        player.fuel -= CONFIG.fuelDrainRate * drainMultiplier * dt;
-        player.fuel = clamp(player.fuel, 0, CONFIG.maxFuel);
-
-        if (player.fuel <= 0) {
-            player.alive = false;
-        }
-    } else {
-        player.fuel = CONFIG.maxFuel;
-    }
+    // ── Fuel (Fuel does not deplete) ───────────────────
+    player.fuel = CONFIG.maxFuel;
 
     // ── Cooldown Timers ─────────────────────────────────
     if (player.flareCooldown > 0) player.flareCooldown -= dt;

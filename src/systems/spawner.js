@@ -1,9 +1,9 @@
 /**
- * spawner.js — Threat escalation spawner & clustered terrain generation
+ * spawner.js — Threat escalation spawner & terrain generation
  * 
  * Manages:
  * - Dynamic missile archetype escalation based on survival time
- * - Realistic terrain generation: clustered mountain ridges, canyons, and radar towers
+ * - Environmental mesa and cliff formations
  * - Fuel canister distribution
  */
 
@@ -118,57 +118,21 @@ function spawnPickup(state, player) {
 }
 
 /**
- * Scatter believable clustered terrain formations in the world.
- * Generates mountain ridge chains (creating canyon navigation corridors),
- * high-altitude communications towers, and mesa plateaus.
+ * Scatter environmental mesa/cliff formations in the world.
  * 
  * @param {object} state
  */
 export function scatterObstacles(state) {
     state.obstacles.length = 0;
 
-    // ── 1. Mountain Ridge Chains (Natural Flight Canyons) ─
-    const chainCount = 3;
-    for (let c = 0; c < chainCount; c++) {
-        const chainAngle = (c / chainCount) * Math.PI * 2 + randRange(-0.4, 0.4);
-        const chainDist = randRange(450, CONFIG.obstacleSpawnRadius * 0.7);
-        let curX = Math.cos(chainAngle) * chainDist;
-        let curY = Math.sin(chainAngle) * chainDist;
-
-        const ridgeHeading = chainAngle + Math.PI / 2 + randRange(-0.3, 0.3);
-        const peaksInChain = randInt(3, 4);
-
-        for (let p = 0; p < peaksInChain; p++) {
-            const size = randRange(CONFIG.obstacleMinRadius + 15, CONFIG.obstacleMaxRadius);
-            state.obstacles.push(createObstacle(curX, curY, 'mountain', size));
-
-            // Step along ridge corridor
-            const stepDist = size * 1.5;
-            curX += Math.cos(ridgeHeading) * stepDist + randRange(-30, 30);
-            curY += Math.sin(ridgeHeading) * stepDist + randRange(-30, 30);
-        }
-    }
-
-    // ── 2. Strategic Communications & Radar Towers ──────
-    const towerCount = 5;
-    for (let i = 0; i < towerCount; i++) {
-        const angle = (i / towerCount) * Math.PI * 2 + randRange(0.2, 0.6);
-        const dist = randRange(350, CONFIG.obstacleSpawnRadius * 0.85);
-        const x = Math.cos(angle) * dist;
-        const y = Math.sin(angle) * dist;
-        const size = randRange(45, 65);
-
-        state.obstacles.push(createObstacle(x, y, 'tower', size));
-    }
-
-    // ── 3. Mesa / Cliff Formations ──────────────────────
-    const cliffCount = 4;
+    // ── Mesa / Cliff Formations ──────────────────────────
+    const cliffCount = CONFIG.obstacleCount || 14;
     for (let i = 0; i < cliffCount; i++) {
-        const angle = randRange(0, Math.PI * 2);
-        const dist = randRange(500, CONFIG.obstacleSpawnRadius);
+        const angle = (i / cliffCount) * Math.PI * 2 + randRange(-0.2, 0.2);
+        const dist = randRange(350, CONFIG.obstacleSpawnRadius * 0.95);
         const x = Math.cos(angle) * dist;
         const y = Math.sin(angle) * dist;
-        const size = randRange(60, 95);
+        const size = randRange(55, 95);
 
         state.obstacles.push(createObstacle(x, y, 'cliff', size));
     }

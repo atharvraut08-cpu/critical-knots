@@ -39,69 +39,11 @@ export function drawTitleScreen(ctx, w, h, state) {
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillText('A 2D Missile Survival Arcade Game', w / 2, h * 0.255);
 
-    const activeMode = (state && state.gameMode) ? state.gameMode : 'survival';
-
-    // ── Game Mode Selection Options ─────────────────────
-    const cardW = 215;
-    const cardH = 60;
-    const gap = 24;
-    const cardY = h * 0.31;
-
-    // Mode 1: Survival Mode
-    const c1X = w / 2 - cardW - gap / 2;
-    const isMode1 = activeMode === 'survival';
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(c1X, cardY, cardW, cardH, 8);
-    ctx.fillStyle = isMode1 ? 'rgba(96, 213, 255, 0.22)' : 'rgba(255, 255, 255, 0.05)';
-    ctx.fill();
-    ctx.strokeStyle = isMode1 ? '#60d5ff' : 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = isMode1 ? 2 : 1;
-    if (isMode1) {
-        ctx.shadowColor = '#60d5ff';
-        ctx.shadowBlur = 12;
-    }
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = isMode1 ? '#ffffff' : '#99aabb';
-    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('Press 1 for Survival Mode', c1X + cardW / 2, cardY + 23);
-    ctx.fillStyle = isMode1 ? '#60d5ff' : '#667788';
-    ctx.font = '12px monospace';
-    ctx.fillText(isMode1 ? '► ACTIVE (Fuel Depletion) ◄' : 'Fuel Depletion Active', c1X + cardW / 2, cardY + 43);
-
-    // Mode 2: Free Flight
-    const c2X = w / 2 + gap / 2;
-    const isMode2 = activeMode === 'freeflight';
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(c2X, cardY, cardW, cardH, 8);
-    ctx.fillStyle = isMode2 ? 'rgba(34, 204, 119, 0.22)' : 'rgba(255, 255, 255, 0.05)';
-    ctx.fill();
-    ctx.strokeStyle = isMode2 ? '#22cc77' : 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = isMode2 ? 2 : 1;
-    if (isMode2) {
-        ctx.shadowColor = '#22cc77';
-        ctx.shadowBlur = 12;
-    }
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = isMode2 ? '#ffffff' : '#99aabb';
-    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('Press 2 for Free Flight', c2X + cardW / 2, cardY + 23);
-    ctx.fillStyle = isMode2 ? '#22cc77' : '#667788';
-    ctx.font = '12px monospace';
-    ctx.fillText(isMode2 ? '► ACTIVE (Infinite Fuel) ◄' : 'Infinite Fuel Mode', c2X + cardW / 2, cardY + 43);
-
     // ── Start Game Prompt ───────────────────────────────
     const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
     ctx.fillStyle = `rgba(96, 213, 255, ${pulse})`;
     ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('[ Press SPACE to Start Game ]', w / 2, h * 0.46);
+    ctx.fillText('[ Press SPACE to Start Game ]', w / 2, h * 0.36);
 
     // ── Controls Reference ──────────────────────────────
     ctx.fillStyle = '#8899aa';
@@ -114,12 +56,11 @@ export function drawTitleScreen(ctx, w, h, state) {
         ['Q', 'Deploy Flare Salvo'],
         ['E', 'Trigger EMP Wave'],
         ['P', 'Pause Game'],
-        ['1 / 2', 'Select Mode (Survival / Free Flight)'],
         ['SPACE', 'Start Game / Restart'],
     ];
 
-    const startY = h * 0.54;
-    const lineH = 21;
+    const startY = h * 0.46;
+    const lineH = 24;
     ctx.textAlign = 'right';
     ctx.fillStyle = '#60d5ff';
     for (let i = 0; i < controls.length; i++) {
@@ -162,7 +103,6 @@ export function drawHUD(ctx, w, h, state) {
     ctx.fillText(formatTime(state.timeAlive), w / 2, margin);
 
     // ── Fuel Bar (top-left) ─────────────────────────────
-    const isFreeFlight = state.gameMode === 'freeflight';
     const fuelX = margin;
     const fuelY = margin;
 
@@ -170,7 +110,7 @@ export function drawHUD(ctx, w, h, state) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#aabbcc';
     ctx.font = '12px monospace';
-    ctx.fillText(isFreeFlight ? 'FUEL [FREE FLIGHT]' : 'FUEL', fuelX, fuelY);
+    ctx.fillText('FUEL', fuelX, fuelY);
 
     // Background (rounded track)
     ctx.beginPath();
@@ -178,19 +118,16 @@ export function drawHUD(ctx, w, h, state) {
     ctx.fillStyle = 'rgba(255,255,255,0.1)';
     ctx.fill();
 
-    // Fill, with a soft glow that reads as urgency as fuel drops
-    const fuelPct = isFreeFlight ? 1 : player.fuel / player.maxFuel;
-    const fuelColor = isFreeFlight ? '#22cc77' : (fuelPct > 0.3 ? '#22cc77' : (fuelPct > 0.15 ? '#ffaa22' : '#ff3344'));
-    if (barW * fuelPct > 1) {
-        ctx.save();
-        ctx.shadowColor = fuelColor;
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.roundRect(fuelX, fuelY + 16, Math.max(barW * fuelPct, barH), barH, barH / 2);
-        ctx.fillStyle = fuelColor;
-        ctx.fill();
-        ctx.restore();
-    }
+    // Fill (always full with healthy green glow)
+    const fuelColor = '#22cc77';
+    ctx.save();
+    ctx.shadowColor = fuelColor;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
+    ctx.fillStyle = fuelColor;
+    ctx.fill();
+    ctx.restore();
 
     // Border
     ctx.beginPath();
@@ -198,12 +135,6 @@ export function drawHUD(ctx, w, h, state) {
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
     ctx.lineWidth = 1;
     ctx.stroke();
-
-    // Low fuel warning flash (only in Survival mode)
-    if (!isFreeFlight && fuelPct < 0.15 && Math.sin(Date.now() / 150) > 0) {
-        ctx.fillStyle = 'rgba(255,50,50,0.15)';
-        ctx.fillRect(0, 0, w, h);
-    }
 
     // ── Countermeasure Charges (top-left, below fuel) ───
     const chargeY = fuelY + 40;
@@ -495,7 +426,7 @@ export function drawMinimap(ctx, w, h, state) {
         const pt = worldToMinimap(obs.x, obs.y, player.x, player.y, range, vx, vy, mw, mh);
         if (!pt.inBounds) continue;
         ctx.beginPath();
-        ctx.arc(pt.x, pt.y, obs.type === 'mountain' ? 3.5 : 2.5, 0, Math.PI * 2);
+        ctx.arc(pt.x, pt.y, 2.8, 0, Math.PI * 2);
         ctx.fill();
     }
 

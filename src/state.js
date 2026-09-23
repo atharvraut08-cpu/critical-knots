@@ -15,7 +15,6 @@ let phase = 'title';
 const state = {
     phase: 'title',
     paused: false,
-    gameMode: 'survival',   // 'survival' | 'freeflight'
     timeAlive: 0,           // seconds survived
 
     // Entity arrays — filtered each frame by alive flag

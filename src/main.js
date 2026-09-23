@@ -90,12 +90,6 @@ function loop(timestamp) {
 
     // ── Phase-specific input handling ───────────────────
     if (state.phase === 'title') {
-        if (consumeAction('mode1')) {
-            state.gameMode = 'survival';
-        }
-        if (consumeAction('mode2')) {
-            state.gameMode = 'freeflight';
-        }
         if (consumeAction('start')) {
             startGame();
         }

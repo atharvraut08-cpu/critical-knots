@@ -16,8 +16,6 @@ const keys = {
     restart: false,  // single-press action (Space or R)
     pause: false,    // single-press action (P key)
     start: false,    // single-press action (Space to start)
-    mode1: false,    // single-press action (1 key for Survival Mode)
-    mode2: false,    // single-press action (2 key for Free Flight)
 };
 
 // Track which action keys have been consumed this frame
@@ -27,8 +25,6 @@ const consumed = {
     restart: false,
     pause: false,
     start: false,
-    mode1: false,
-    mode2: false,
 };
 
 /**
@@ -70,14 +66,6 @@ export function initInput() {
             case 'KeyP':
                 if (!consumed.pause) keys.pause = true;
                 break;
-            case 'Digit1':
-            case 'Numpad1':
-                if (!consumed.mode1) keys.mode1 = true;
-                break;
-            case 'Digit2':
-            case 'Numpad2':
-                if (!consumed.mode2) keys.mode2 = true;
-                break;
         }
     });
 
@@ -113,14 +101,6 @@ export function initInput() {
                 break;
             case 'KeyP':
                 consumed.pause = false;
-                break;
-            case 'Digit1':
-            case 'Numpad1':
-                consumed.mode1 = false;
-                break;
-            case 'Digit2':
-            case 'Numpad2':
-                consumed.mode2 = false;
                 break;
         }
     });
