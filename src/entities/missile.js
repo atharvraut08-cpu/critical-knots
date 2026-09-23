@@ -108,10 +108,9 @@ export function updateMissile(missile, dt, player, flares = [], now = 0) {
             missile.confuseTarget = null;
             missile.confusedUntil = 0;
 
-            // Evaluate all active flares in airspace
+            // Evaluate all active flares in airspace — randomly distribute lock-ons across the spread pattern
             if (flares && flares.length > 0) {
-                let bestFlare = null;
-                let bestScore = -1;
+                const candidates = [];
 
                 for (let i = 0; i < flares.length; i++) {
                     const f = flares[i];
@@ -126,25 +125,31 @@ export function updateMissile(missile, dt, player, flares = [], now = 0) {
 
                     // Flare must be within seeker field-of-view (~77°)
                     if (angleDelta < CONFIG.flareSeekerFov) {
-                        const distToPlayer = distance(missile, player);
                         const flareBurnRatio = Math.max(0, f.life / f.maxLife); // brighter when young
-
-                        // Heat attraction score: closer & brighter flares dominate jet exhaust
+                        const heat = f.heatSignature || 1.0;
                         const proximityFactor = Math.max(0.1, 1 - (distToFlare / CONFIG.flareDetectionRadius));
-                        const score = proximityFactor * (0.5 + flareBurnRatio * 0.8) * (1 - angleDelta / CONFIG.flareSeekerFov);
 
-                        if (score > bestScore && score > (1 - CONFIG.flareAttractionChance)) {
-                            bestScore = score;
-                            bestFlare = f;
+                        // Thermal signature attraction score with per-missile sensor noise
+                        const sensorNoise = 0.75 + Math.random() * 0.5;
+                        const score = proximityFactor * (0.4 + flareBurnRatio * 0.6) * heat * sensorNoise * (1 - angleDelta / CONFIG.flareSeekerFov);
+
+                        if (score > (1 - CONFIG.flareAttractionChance)) {
+                            candidates.push({ flare: f, score });
                         }
                     }
                 }
 
-                if (bestFlare) {
-                    missile.confuseTarget = bestFlare;
-                    missile.confusedUntil = now + bestFlare.life;
-                    targetX = bestFlare.x;
-                    targetY = bestFlare.y;
+                if (candidates.length > 0) {
+                    // Randomly select among top qualifying flares in the spread salvo
+                    candidates.sort((a, b) => b.score - a.score);
+                    // Select randomly from viable candidates to create chaotic diverging pursuit
+                    const selectedIdx = Math.floor(Math.random() * Math.min(candidates.length, 3));
+                    const chosenFlare = candidates[selectedIdx].flare;
+
+                    missile.confuseTarget = chosenFlare;
+                    missile.confusedUntil = now + chosenFlare.life;
+                    targetX = chosenFlare.x;
+                    targetY = chosenFlare.y;
                 }
             }
         }

@@ -10,11 +10,14 @@ const keys = {
     left: false,
     right: false,
     boost: false,
-    flare: false,    // single-press action
-    emp: false,      // single-press action
-    restart: false,  // single-press action
-    pause: false,    // single-press action
-    start: false,    // space to start from title
+    fire: false,     // continuous / held action (C key)
+    flare: false,    // single-press action (Q key)
+    emp: false,      // single-press action (E key)
+    restart: false,  // single-press action (Space or R)
+    pause: false,    // single-press action (P key)
+    start: false,    // single-press action (Space to start)
+    mode1: false,    // single-press action (1 key for Survival Mode)
+    mode2: false,    // single-press action (2 key for Free Flight)
 };
 
 // Track which action keys have been consumed this frame
@@ -24,6 +27,8 @@ const consumed = {
     restart: false,
     pause: false,
     start: false,
+    mode1: false,
+    mode2: false,
 };
 
 /**
@@ -45,10 +50,16 @@ export function initInput() {
             case 'ShiftRight':
                 keys.boost = true;
                 break;
+            case 'KeyC':
+                keys.fire = true;
+                break;
+            case 'KeyQ':
+                if (!consumed.flare) keys.flare = true;
+                break;
             case 'Space':
                 e.preventDefault();
-                if (!consumed.flare) keys.flare = true;
                 if (!consumed.start) keys.start = true;
+                if (!consumed.restart) keys.restart = true;
                 break;
             case 'KeyE':
                 if (!consumed.emp) keys.emp = true;
@@ -58,6 +69,14 @@ export function initInput() {
                 break;
             case 'KeyP':
                 if (!consumed.pause) keys.pause = true;
+                break;
+            case 'Digit1':
+            case 'Numpad1':
+                if (!consumed.mode1) keys.mode1 = true;
+                break;
+            case 'Digit2':
+            case 'Numpad2':
+                if (!consumed.mode2) keys.mode2 = true;
                 break;
         }
     });
@@ -76,9 +95,15 @@ export function initInput() {
             case 'ShiftRight':
                 keys.boost = false;
                 break;
-            case 'Space':
+            case 'KeyC':
+                keys.fire = false;
+                break;
+            case 'KeyQ':
                 consumed.flare = false;
+                break;
+            case 'Space':
                 consumed.start = false;
+                consumed.restart = false;
                 break;
             case 'KeyE':
                 consumed.emp = false;
@@ -88,6 +113,14 @@ export function initInput() {
                 break;
             case 'KeyP':
                 consumed.pause = false;
+                break;
+            case 'Digit1':
+            case 'Numpad1':
+                consumed.mode1 = false;
+                break;
+            case 'Digit2':
+            case 'Numpad2':
+                consumed.mode2 = false;
                 break;
         }
     });

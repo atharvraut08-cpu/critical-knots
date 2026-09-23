@@ -8,9 +8,9 @@
 
 import { CONFIG } from './config.js';
 import state, { reset } from './state.js';
-import keys, { initInput, consumeAction, suppressAction } from './input.js';
+import keys, { initInput, consumeAction } from './input.js';
 import camera, { updateCamera, worldToScreen, isVisible, resetCamera } from './camera.js';
-import { createPlayer, updatePlayer, drawPlayer } from './entities/player.js';
+import { createPlayer, updatePlayer, drawPlayer, drawBullet } from './entities/player.js';
 import { updateMissile, drawMissile } from './entities/missile.js';
 import { drawObstacle } from './entities/obstacle.js';
 import { updatePickup, drawPickup } from './entities/pickup.js';
@@ -90,15 +90,18 @@ function loop(timestamp) {
 
     // ── Phase-specific input handling ───────────────────
     if (state.phase === 'title') {
+        if (consumeAction('mode1')) {
+            state.gameMode = 'survival';
+        }
+        if (consumeAction('mode2')) {
+            state.gameMode = 'freeflight';
+        }
         if (consumeAction('start')) {
-            // Space is shared by 'start' and 'flare' — suppress the flare
-            // trigger so a still-held Space doesn't burn a charge on frame 1.
-            suppressAction('flare');
             startGame();
         }
     } else if (state.phase === 'gameover') {
-        // Risk #5: debounced restart — only on game-over screen
-        if (consumeAction('restart')) {
+        // Debounced restart via Space (or R) — only on game-over screen
+        if (consumeAction('restart') || consumeAction('start')) {
             startGame();
         }
     } else if (state.phase === 'playing') {
@@ -186,6 +189,14 @@ function update(dt) {
         }
     }
 
+    // Update player machine gun bullets
+    for (const b of state.bullets) {
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        b.life -= dt;
+        if (b.life <= 0) b.alive = false;
+    }
+
     // Camera follow
     updateCamera(dt, player);
 
@@ -194,6 +205,7 @@ function update(dt) {
     state.missiles = state.missiles.filter(e => e.alive);
     state.obstacles = state.obstacles.filter(e => e.alive);
     state.pickups = state.pickups.filter(e => e.alive);
+    state.bullets = state.bullets.filter(e => e.alive);
 }
 
 function onPlayerDeath() {
@@ -213,7 +225,7 @@ function render() {
         // Sky background + title overlay
         drawSky(ctx, w, h, 0);
         drawParallax(ctx, { x: Date.now() / 100, y: 0 }, w, h);
-        drawTitleScreen(ctx, w, h);
+        drawTitleScreen(ctx, w, h, state);
         return;
     }
 
@@ -249,6 +261,14 @@ function render() {
 
     // ── Countermeasure effects ──────────────────────────
     drawCountermeasures(state, ctx, worldToScreen, w, h);
+
+    // ── Machine Gun Bullets ─────────────────────────────
+    for (const b of state.bullets) {
+        if (!b.alive) continue;
+        if (!isVisible(b.x, b.y, w, h)) continue;
+        const sp = worldToScreen(b.x, b.y, w, h);
+        drawBullet(b, ctx, sp);
+    }
 
     // ── Player ──────────────────────────────────────────
     if (state.player && state.player.alive) {

@@ -167,6 +167,64 @@ export function checkAllCollisions(state) {
             }
         }
     }
+
+    // ── 7. Bullet ↔ Missile & Obstacle (Asteroid) Impact ──
+    const bullets = state.bullets;
+    if (bullets && bullets.length > 0) {
+        for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
+            const b = bullets[bIdx];
+            if (!b.alive) continue;
+
+            // Check bullet against Missiles
+            for (let mIdx = 0; mIdx < missiles.length; mIdx++) {
+                const m = missiles[mIdx];
+                if (!m.alive) continue;
+
+                if (circleCircle(b, m)) {
+                    b.alive = false;
+                    m.alive = false;
+                    state.stats.missilesDestroyed++;
+                    spawnExplosion(m.x, m.y, false, m.type === 'heavy');
+                    break;
+                }
+            }
+
+            if (!b.alive) continue;
+
+            // Check bullet against Obstacles / Asteroids
+            for (let oIdx = 0; oIdx < obstacles.length; oIdx++) {
+                const obs = obstacles[oIdx];
+                if (!obs.alive) continue;
+
+                const hit = obs.shape === 'aabb'
+                    ? circleAABB(b, obs)
+                    : circleCircle(b, obs);
+
+                if (hit) {
+                    b.alive = false;
+                    obs.alive = false;
+                    // Fragmentation debris & smoke on obstacle destruction
+                    emit(b.x, b.y, 16, 'spark', '255,200,100', {
+                        speedMin: 50,
+                        speedMax: 150,
+                        sizeMin: 1.5,
+                        sizeMax: 3.5,
+                        lifeMin: 0.15,
+                        lifeMax: 0.4,
+                    });
+                    emit(obs.x, obs.y, 10, 'smoke', '110,110,120', {
+                        speedMin: 20,
+                        speedMax: 70,
+                        sizeMin: 4,
+                        sizeMax: 12,
+                        lifeMin: 0.4,
+                        lifeMax: 0.9,
+                    });
+                    break;
+                }
+            }
+        }
+    }
 }
 
 /**

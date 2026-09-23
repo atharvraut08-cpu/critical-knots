@@ -6,12 +6,26 @@
  */
 
 export const CONFIG = {
-    // ── Player ──────────────────────────────────────────
+    // ── Player & Flight Aerodynamics ───────────────────
     playerBaseSpeed: 220,       // px/s cruise speed
     playerTurnRate: 2.2,        // rad/s
     playerRadius: 14,           // collision radius
     boostMultiplier: 1.6,       // speed × this while boosting (352 px/s)
     boostFuelDrainMultiplier: 2.5, // fuel drain × this while boosting
+    turnDragDecel: 175,         // px/s² speed bleed while banking (induced drag)
+    minTurnSpeedFactor: 0.60,   // speed floor while turning (60% of top speed)
+    planeAccelRate: 150,        // px/s² straight-line acceleration back up to cruise
+    planeBoostAccelRate: 280,   // px/s² acceleration while boosting
+
+    // ── Guns & Ammo System ──────────────────────────────
+    gunFireRate: 0.075,         // seconds between shots (~13.3 rounds/sec)
+    bulletSpeed: 950,           // px/s muzzle velocity
+    bulletLife: 1.1,            // seconds before despawning (~1045px range)
+    bulletRadius: 3.5,          // collision radius, px
+    magCapacity: 200,           // bullets per magazine
+    maxMags: 10,                // 10 magazines = 2,000 bullets total
+    totalBullets: 2000,         // total ammo supply
+    reloadDuration: 10.0,       // strict 10-second reload countdown
 
     // ── Fuel ────────────────────────────────────────────
     maxFuel: 100,
@@ -94,15 +108,19 @@ export const CONFIG = {
     // ── Countermeasures: Flares ─────────────────────────
     maxFlares: 3,
     flareRegenTime: 18,         // seconds to regen 1 charge
-    flareCooldown: 0.6,         // seconds between uses
-    flareEjectionSpeed: 130,    // px/s rearward/lateral ejection velocity
-    flareDrag: 1.8,             // aerodynamic drag deceleration
+    flareCooldown: 0.8,         // seconds between uses
+    flareBurstCount: 10,        // 8 to 12 flares deployed in a simultaneous burst
+    flareSpreadAngle: 1.25,     // ~72 deg spread each side (wide fan pattern)
+    flareMinSpeed: 140,         // px/s ejection speed min
+    flareMaxSpeed: 240,         // px/s ejection speed max
+    flareEjectionSpeed: 180,    // px/s baseline rearward/lateral ejection velocity
+    flareDrag: 1.6,             // aerodynamic drag deceleration
     flareBurnDuration: 3.5,     // seconds of active burn
-    flareSparkRate: 0.025,      // seconds between spark emissions
-    flareSmokeRate: 0.04,       // seconds between smoke emissions
+    flareSparkRate: 0.02,       // seconds between spark emissions
+    flareSmokeRate: 0.016,      // heavy continuous smoke emission rate (thick arcs)
     flareSeekerFov: 1.35,       // ~77 deg seeker cone
-    flareDetectionRadius: 450,  // px range to distract missiles
-    flareAttractionChance: 0.88,// base chance to break missile lock
+    flareDetectionRadius: 480,  // px range to distract missiles
+    flareAttractionChance: 0.90,// base chance to break missile lock
 
     // ── Countermeasures: EMP ────────────────────────────
     maxEmp: 1,
@@ -133,7 +151,7 @@ export const CONFIG = {
     altitudeShadowOffset: 16,   // px offset for aircraft & missile drop shadows
 
     // ── Particles ───────────────────────────────────────
-    maxParticles: 500,          // pre-allocated pool size
+    maxParticles: 1500,         // expanded pool size for heavy multi-flare smoke trails
     smokeLifeMin: 0.3,          // seconds
     smokeLifeMax: 0.8,
     explosionLifeMin: 0.4,
@@ -155,8 +173,6 @@ export const CONFIG = {
     // ── Parallax ────────────────────────────────────────
     parallaxLayers: [
         { factor: 0.08, count: 50, sizeMin: 1, sizeMax: 2, color: 'rgba(255,255,255,0.4)', twinkle: true }, // stars
-        { factor: 0.25, count: 25, sizeMin: 40, sizeMax: 90, color: 'rgba(255,255,255,0.18)', isCloud: true }, // high cirrus
-        { factor: 0.45, count: 18, sizeMin: 70, sizeMax: 150, color: 'rgba(240,245,255,0.22)', isCloud: true }, // mid cumulus
     ],
     parallaxTileSize: 2400,     // world units per tile repeat
 

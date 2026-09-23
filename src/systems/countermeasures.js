@@ -70,10 +70,10 @@ export function updateCountermeasures(state, dt, input) {
         f.vx *= drag;
         f.vy *= drag;
 
-        // Emit hot sparks & smoke trail while burning
+        // Emit hot sparks & heavy glowing smoke trail while burning
         f.sparkTimer -= dt;
         if (f.sparkTimer <= 0) {
-            emit(f.x, f.y, 2, 'spark', '255,220,100', {
+            emit(f.x, f.y, 1, 'spark', '255,230,120', {
                 speedMin: 15,
                 speedMax: 45,
                 sizeMin: 1.5,
@@ -86,13 +86,23 @@ export function updateCountermeasures(state, dt, input) {
 
         f.smokeTimer -= dt;
         if (f.smokeTimer <= 0) {
-            emit(f.x, f.y, 1, 'smoke', '220,225,235', {
-                speedMin: 5,
-                speedMax: 25,
-                sizeMin: 3.5,
-                sizeMax: 7.0,
-                lifeMin: 0.4,
-                lifeMax: 0.8,
+            // Heavy, continuous billowing smoke trail forming thick arcs
+            emit(f.x, f.y, 2, 'smoke', '235,235,245', {
+                speedMin: 8,
+                speedMax: 28,
+                sizeMin: 4.5,
+                sizeMax: 10.0,
+                lifeMin: 0.5,
+                lifeMax: 1.2,
+            });
+            // Glowing incandescent core inside the smoke plume
+            emit(f.x, f.y, 1, 'flame', '255,180,60', {
+                speedMin: 4,
+                speedMax: 16,
+                sizeMin: 3.0,
+                sizeMax: 6.0,
+                lifeMin: 0.2,
+                lifeMax: 0.45,
             });
             f.smokeTimer = CONFIG.flareSmokeRate;
         }
@@ -144,46 +154,61 @@ export function updateCountermeasures(state, dt, input) {
 }
 
 /**
- * Launch a physical flare salvo (port and starboard).
- * Ejected rearward and laterally away from the aircraft, slowing under aerodynamic drag.
+ * Launch a realistic physical multi-flare burst salvo (8 to 12 flares).
+ * Flares fan out backward and outward in a wide arc from the aircraft tail.
  */
 function activateFlares(state, player) {
     player.flares--;
     player.flareCooldown = CONFIG.flareCooldown;
 
-    // Eject two flares angled port and starboard
-    const angles = [
-        player.heading + Math.PI - 0.45,
-        player.heading + Math.PI + 0.45,
-    ];
+    const count = CONFIG.flareBurstCount || 10;
+    const baseBackAngle = player.heading + Math.PI;
+    const maxSpread = CONFIG.flareSpreadAngle || 1.25; // ~72 deg spread each side
 
-    for (const angle of angles) {
-        const ejectSpeed = CONFIG.flareEjectionSpeed;
-        const vx = Math.cos(player.heading) * (player.speed * 0.4) + Math.cos(angle) * ejectSpeed;
-        const vy = Math.sin(player.heading) * (player.speed * 0.4) + Math.sin(angle) * ejectSpeed;
+    for (let i = 0; i < count; i++) {
+        // Symmetrical fan distribution from port to starboard with organic spread jitter
+        const t = count > 1 ? (i / (count - 1)) * 2 - 1 : 0; // -1 to +1
+        const spreadJitter = randRange(-0.06, 0.06);
+        const flareAngle = baseBackAngle + (t * maxSpread) + spreadJitter;
+
+        const ejectSpeed = randRange(CONFIG.flareMinSpeed || 140, CONFIG.flareMaxSpeed || 240);
+
+        // Aircraft momentum + wide lateral/rearward ejection velocity vector
+        const vx = Math.cos(player.heading) * (player.speed * 0.35) + Math.cos(flareAngle) * ejectSpeed;
+        const vy = Math.sin(player.heading) * (player.speed * 0.35) + Math.sin(flareAngle) * ejectSpeed;
 
         state.flares.push({
-            x: player.x,
-            y: player.y,
+            id: Math.random(),
+            x: player.x - Math.cos(player.heading) * (player.radius * 0.8),
+            y: player.y - Math.sin(player.heading) * (player.radius * 0.8),
             vx,
             vy,
-            life: CONFIG.flareBurnDuration,
+            life: CONFIG.flareBurnDuration * randRange(0.85, 1.15),
             maxLife: CONFIG.flareBurnDuration,
             age: 0,
             alive: true,
-            sparkTimer: 0,
-            smokeTimer: 0,
+            sparkTimer: randRange(0, 0.02),
+            smokeTimer: randRange(0, 0.01),
+            heatSignature: randRange(0.85, 1.45), // varying heat attraction profiles
         });
     }
 
-    // Initial ignition flash & shock particles
-    emit(player.x, player.y, 18, 'spark', '255,255,200', {
-        speedMin: 40,
-        speedMax: 120,
-        sizeMin: 2,
-        sizeMax: 5,
+    // Magnesium salvo ignition flash & burst sparks
+    emit(player.x, player.y, 25, 'spark', '255,255,210', {
+        speedMin: 50,
+        speedMax: 180,
+        sizeMin: 2.5,
+        sizeMax: 5.5,
         lifeMin: 0.1,
-        lifeMax: 0.25,
+        lifeMax: 0.28,
+    });
+    emit(player.x, player.y, 8, 'explosion', '255,200,100', {
+        speedMin: 25,
+        speedMax: 80,
+        sizeMin: 4,
+        sizeMax: 9,
+        lifeMin: 0.15,
+        lifeMax: 0.35,
     });
 }
 

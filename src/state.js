@@ -15,6 +15,7 @@ let phase = 'title';
 const state = {
     phase: 'title',
     paused: false,
+    gameMode: 'survival',   // 'survival' | 'freeflight'
     timeAlive: 0,           // seconds survived
 
     // Entity arrays — filtered each frame by alive flag
@@ -23,6 +24,7 @@ const state = {
     pickups: [],
     flares: [],             // active flare decoys in the world
     empWaves: [],           // active expanding electromagnetic pulse shockwaves
+    bullets: [],            // active player machine gun projectiles
 
     // Player reference (set by main.js on game start)
     player: null,
@@ -63,6 +65,7 @@ export function reset() {
     state.pickups.length = 0;
     state.flares.length = 0;
     state.empWaves.length = 0;
+    state.bullets.length = 0;
 
     state.player = null;
 

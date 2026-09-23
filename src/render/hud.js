@@ -7,6 +7,7 @@
 
 import { CONFIG } from '../config.js';
 import { getActiveCount } from '../entities/particle.js';
+import { clamp } from '../utils/math.js';
 
 /**
  * Draw the title screen.
@@ -16,7 +17,7 @@ import { getActiveCount } from '../entities/particle.js';
  * @param {number} w - canvas width
  * @param {number} h - canvas height
  */
-export function drawTitleScreen(ctx, w, h) {
+export function drawTitleScreen(ctx, w, h, state) {
     // Darkened overlay
     ctx.fillStyle = 'rgba(10, 10, 30, 0.85)';
     ctx.fillRect(0, 0, w, h);
@@ -29,36 +30,96 @@ export function drawTitleScreen(ctx, w, h) {
     ctx.shadowColor = '#60d5ff';
     ctx.shadowBlur = 30;
     ctx.fillStyle = '#60d5ff';
-    ctx.font = 'bold 56px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('SKYFALL EVASION', w / 2, h * 0.25);
+    ctx.font = 'bold 54px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('SKYFALL EVASION', w / 2, h * 0.19);
     ctx.shadowBlur = 0;
 
     // Subtitle
     ctx.fillStyle = '#aaccee';
-    ctx.font = '18px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('A 2D Missile Survival Arcade Game', w / 2, h * 0.32);
+    ctx.font = '17px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('A 2D Missile Survival Arcade Game', w / 2, h * 0.255);
 
-    // "Press Space to Fly"
+    const activeMode = (state && state.gameMode) ? state.gameMode : 'survival';
+
+    // ── Game Mode Selection Options ─────────────────────
+    const cardW = 215;
+    const cardH = 60;
+    const gap = 24;
+    const cardY = h * 0.31;
+
+    // Mode 1: Survival Mode
+    const c1X = w / 2 - cardW - gap / 2;
+    const isMode1 = activeMode === 'survival';
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(c1X, cardY, cardW, cardH, 8);
+    ctx.fillStyle = isMode1 ? 'rgba(96, 213, 255, 0.22)' : 'rgba(255, 255, 255, 0.05)';
+    ctx.fill();
+    ctx.strokeStyle = isMode1 ? '#60d5ff' : 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = isMode1 ? 2 : 1;
+    if (isMode1) {
+        ctx.shadowColor = '#60d5ff';
+        ctx.shadowBlur = 12;
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isMode1 ? '#ffffff' : '#99aabb';
+    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('Press 1 for Survival Mode', c1X + cardW / 2, cardY + 23);
+    ctx.fillStyle = isMode1 ? '#60d5ff' : '#667788';
+    ctx.font = '12px monospace';
+    ctx.fillText(isMode1 ? '► ACTIVE (Fuel Depletion) ◄' : 'Fuel Depletion Active', c1X + cardW / 2, cardY + 43);
+
+    // Mode 2: Free Flight
+    const c2X = w / 2 + gap / 2;
+    const isMode2 = activeMode === 'freeflight';
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(c2X, cardY, cardW, cardH, 8);
+    ctx.fillStyle = isMode2 ? 'rgba(34, 204, 119, 0.22)' : 'rgba(255, 255, 255, 0.05)';
+    ctx.fill();
+    ctx.strokeStyle = isMode2 ? '#22cc77' : 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = isMode2 ? 2 : 1;
+    if (isMode2) {
+        ctx.shadowColor = '#22cc77';
+        ctx.shadowBlur = 12;
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = isMode2 ? '#ffffff' : '#99aabb';
+    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('Press 2 for Free Flight', c2X + cardW / 2, cardY + 23);
+    ctx.fillStyle = isMode2 ? '#22cc77' : '#667788';
+    ctx.font = '12px monospace';
+    ctx.fillText(isMode2 ? '► ACTIVE (Infinite Fuel) ◄' : 'Infinite Fuel Mode', c2X + cardW / 2, cardY + 43);
+
+    // ── Start Game Prompt ───────────────────────────────
     const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
     ctx.fillStyle = `rgba(96, 213, 255, ${pulse})`;
-    ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('[ Press SPACE to Fly ]', w / 2, h * 0.45);
+    ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('[ Press SPACE to Start Game ]', w / 2, h * 0.46);
 
-    // Controls reference
+    // ── Controls Reference ──────────────────────────────
     ctx.fillStyle = '#8899aa';
-    ctx.font = '14px monospace';
+    ctx.font = '13px monospace';
     const controls = [
-        ['← / A', 'Bank Left'],
-        ['→ / D', 'Bank Right'],
-        ['SHIFT (hold)', 'Speed Boost'],
-        ['SPACE', 'Drop Flare'],
-        ['E', 'Trigger EMP'],
-        ['P', 'Pause'],
-        ['R', 'Restart (on game over)'],
+        ['← / A', 'Bank Left (Induces Drag)'],
+        ['→ / D', 'Bank Right (Induces Drag)'],
+        ['SHIFT (hold)', 'Speed Boost / Afterburner'],
+        ['C', 'Fire Machine Gun'],
+        ['Q', 'Deploy Flare Salvo'],
+        ['E', 'Trigger EMP Wave'],
+        ['P', 'Pause Game'],
+        ['1 / 2', 'Select Mode (Survival / Free Flight)'],
+        ['SPACE', 'Start Game / Restart'],
     ];
 
-    const startY = h * 0.56;
-    const lineH = 22;
+    const startY = h * 0.54;
+    const lineH = 21;
     ctx.textAlign = 'right';
     ctx.fillStyle = '#60d5ff';
     for (let i = 0; i < controls.length; i++) {
@@ -74,7 +135,7 @@ export function drawTitleScreen(ctx, w, h) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#556677';
     ctx.font = '12px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('TE INFT — Computer Graphics Project', w / 2, h * 0.92);
+    ctx.fillText('TE INFT — Computer Graphics Project', w / 2, h * 0.94);
 }
 
 /**
@@ -101,6 +162,7 @@ export function drawHUD(ctx, w, h, state) {
     ctx.fillText(formatTime(state.timeAlive), w / 2, margin);
 
     // ── Fuel Bar (top-left) ─────────────────────────────
+    const isFreeFlight = state.gameMode === 'freeflight';
     const fuelX = margin;
     const fuelY = margin;
 
@@ -108,7 +170,7 @@ export function drawHUD(ctx, w, h, state) {
     ctx.textAlign = 'left';
     ctx.fillStyle = '#aabbcc';
     ctx.font = '12px monospace';
-    ctx.fillText('FUEL', fuelX, fuelY);
+    ctx.fillText(isFreeFlight ? 'FUEL [FREE FLIGHT]' : 'FUEL', fuelX, fuelY);
 
     // Background (rounded track)
     ctx.beginPath();
@@ -117,8 +179,8 @@ export function drawHUD(ctx, w, h, state) {
     ctx.fill();
 
     // Fill, with a soft glow that reads as urgency as fuel drops
-    const fuelPct = player.fuel / player.maxFuel;
-    const fuelColor = fuelPct > 0.3 ? '#22cc77' : (fuelPct > 0.15 ? '#ffaa22' : '#ff3344');
+    const fuelPct = isFreeFlight ? 1 : player.fuel / player.maxFuel;
+    const fuelColor = isFreeFlight ? '#22cc77' : (fuelPct > 0.3 ? '#22cc77' : (fuelPct > 0.15 ? '#ffaa22' : '#ff3344'));
     if (barW * fuelPct > 1) {
         ctx.save();
         ctx.shadowColor = fuelColor;
@@ -137,8 +199,8 @@ export function drawHUD(ctx, w, h, state) {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Low fuel warning flash
-    if (fuelPct < 0.15 && Math.sin(Date.now() / 150) > 0) {
+    // Low fuel warning flash (only in Survival mode)
+    if (!isFreeFlight && fuelPct < 0.15 && Math.sin(Date.now() / 150) > 0) {
         ctx.fillStyle = 'rgba(255,50,50,0.15)';
         ctx.fillRect(0, 0, w, h);
     }
@@ -189,6 +251,82 @@ export function drawHUD(ctx, w, h, state) {
         ctx.stroke();
     }
 
+    // ── Machine Gun & Magazine Ammo UI (below EMP) ───────
+    const gunY = chargeY + 44;
+    const ammoCount = player.ammoInMag !== undefined ? player.ammoInMag : CONFIG.magCapacity;
+    const magsLeft = player.magsRemaining !== undefined ? player.magsRemaining : (CONFIG.maxMags - 1);
+    const isReloading = !!player.reloading;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#aabbcc';
+    ctx.font = '12px monospace';
+    ctx.fillText('GUN AMMO', fuelX, gunY);
+
+    if (isReloading) {
+        // Reload in progress banner & animated countdown bar
+        const reloadProg = Math.max(0, Math.min(1, (CONFIG.reloadDuration - player.reloadTimer) / CONFIG.reloadDuration));
+        const timeLeft = Math.max(0, player.reloadTimer).toFixed(1);
+
+        const blink = Math.sin(Date.now() / 140) > 0;
+        ctx.fillStyle = blink ? '#ffcc00' : '#ff6622';
+        ctx.font = 'bold 12px monospace';
+        ctx.fillText(`⚡ RELOADING: ${timeLeft}s`, fuelX + 75, gunY);
+
+        // Reload track
+        const rTrackW = barW;
+        const rTrackH = 8;
+        const rTrackY = gunY + 6;
+
+        ctx.beginPath();
+        ctx.roundRect(fuelX, rTrackY, rTrackW, rTrackH, 4);
+        ctx.fillStyle = 'rgba(255, 170, 40, 0.15)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.roundRect(fuelX, rTrackY, Math.max(rTrackW * reloadProg, 4), rTrackH, 4);
+        ctx.fillStyle = '#ffaa22';
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255, 180, 50, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    } else {
+        // Numeric ammo in current magazine: e.g. "185 / 200"
+        ctx.textAlign = 'right';
+        ctx.fillStyle = ammoCount > 40 ? '#ffffff' : (ammoCount > 0 ? '#ffaa22' : '#ff4444');
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText(`${ammoCount} / ${CONFIG.magCapacity}`, fuelX + barW, gunY);
+
+        // Magazine ammo bar track
+        const ammoPct = ammoCount / CONFIG.magCapacity;
+        const aTrackW = barW;
+        const aTrackH = 5;
+        const aTrackY = gunY + 5;
+
+        ctx.beginPath();
+        ctx.roundRect(fuelX, aTrackY, aTrackW, aTrackH, 2.5);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.roundRect(fuelX, aTrackY, Math.max(aTrackW * ammoPct, 2), aTrackH, 2.5);
+        ctx.fillStyle = ammoCount > 40 ? '#ffdd44' : '#ff5533';
+        ctx.fill();
+
+        // Reserve Magazines indicator boxes
+        const magY = aTrackY + 13;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8899aa';
+        ctx.font = '10px monospace';
+        ctx.fillText(`MAGS: ${magsLeft} / ${CONFIG.maxMags - 1}`, fuelX, magY);
+
+        for (let m = 0; m < CONFIG.maxMags - 1; m++) {
+            const hasMag = m < magsLeft;
+            ctx.fillStyle = hasMag ? '#60d5ff' : 'rgba(255,255,255,0.12)';
+            ctx.fillRect(fuelX + 78 + m * 10, magY - 8, 7, 9);
+        }
+    }
+
     // ── Entity count debug display (top-right) ──────────
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
@@ -204,6 +342,9 @@ export function drawHUD(ctx, w, h, state) {
         ctx.font = 'bold 14px monospace';
         ctx.fillText('» BOOST «', w / 2, margin + 30);
     }
+
+    // ── Tactical Cockpit Speedometer (bottom-left) ─────
+    drawSpeedometer(ctx, player, w, h);
 
     // ── Minimap / Radar (bottom-right) ──────────────────
     drawMinimap(ctx, w, h, state);
@@ -488,12 +629,12 @@ export function drawGameOverScreen(ctx, w, h, stats) {
         ctx.fillText(statLines[i][1], w / 2 + 20, y);
     }
 
-    // "Press R to Restart"
+    // "Press SPACE to Restart"
     const pulse = 0.5 + Math.sin(Date.now() / 400) * 0.5;
     ctx.textAlign = 'center';
     ctx.fillStyle = `rgba(96, 213, 255, ${pulse})`;
     ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('[ Press R to Restart ]', w / 2, h * 0.78);
+    ctx.fillText('[ Press SPACE to Restart ]', w / 2, h * 0.78);
 }
 
 /**
@@ -506,4 +647,128 @@ function formatTime(seconds) {
     const mins = Math.floor(totalTenths / 600);
     const secs = (totalTenths % 600) / 10;
     return `${String(mins).padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
+}
+
+/**
+ * Render tactical cockpit airspeed indicator (Speedometer) in bottom-left.
+ * Accurately displays real-time dynamic forward velocity and turning drag.
+ * 
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} player
+ * @param {number} w
+ * @param {number} h
+ */
+export function drawSpeedometer(ctx, player, w, h) {
+    if (!player) return;
+
+    const cx = 95;
+    const cy = h - 90;
+    const r = 50;
+    const curSpeed = player.speed || 0;
+    const maxGaugeSpeed = 400; // gauge range: 0 to 400 px/s
+
+    ctx.save();
+
+    // 1. Semi-transparent housing background
+    ctx.beginPath();
+    ctx.arc(cx, cy, r + 14, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 15, 28, 0.65)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(96, 213, 255, 0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // 2. Bezel tick marks and dial arc (from 135° to 405°, 270° total span)
+    const startAngle = Math.PI * 0.75; // 135 deg (bottom-left)
+    const arcSpan = Math.PI * 1.5;    // 270 deg span to bottom-right
+    const endAngle = startAngle + arcSpan;
+
+    // Track arc background
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startAngle, endAngle);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    // Active speed arc
+    const speedRatio = clamp(curSpeed / maxGaugeSpeed, 0, 1);
+    const curAngle = startAngle + arcSpan * speedRatio;
+
+    let arcColor = '#60d5ff'; // cruise blue
+    if (player.boosting) {
+        arcColor = '#ff7700'; // boost orange
+    } else if (player.isTurning) {
+        arcColor = '#ffbb22'; // turn drag amber
+    }
+
+    ctx.save();
+    ctx.shadowColor = arcColor;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, startAngle, curAngle);
+    ctx.strokeStyle = arcColor;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.restore();
+
+    // Tick marks at 0, 100, 200, 300, 400
+    for (let s = 0; s <= 400; s += 100) {
+        const t = s / 400;
+        const a = startAngle + arcSpan * t;
+        const x1 = cx + Math.cos(a) * (r - 7);
+        const y1 = cy + Math.sin(a) * (r - 7);
+        const x2 = cx + Math.cos(a) * (r + 1);
+        const y2 = cy + Math.sin(a) * (r + 1);
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+
+    // Needle pointer
+    const needleX = cx + Math.cos(curAngle) * (r - 4);
+    const needleY = cy + Math.sin(curAngle) * (r - 4);
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(needleX, needleY);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Needle center hub
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+
+    // Digital readout in center
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 18px monospace';
+    ctx.fillText(`${Math.round(curSpeed)}`, cx, cy + 10);
+
+    ctx.fillStyle = '#8899aa';
+    ctx.font = '10px monospace';
+    ctx.fillText('KTS IAS', cx, cy + 24);
+
+    // Aerodynamic flight state badge above dial
+    let badgeText = 'CRUISE';
+    let badgeColor = '#60d5ff';
+    if (player.boosting) {
+        badgeText = 'AFTERBURNER';
+        badgeColor = '#ff7700';
+    } else if (player.isTurning) {
+        badgeText = 'G-DRAG';
+        badgeColor = '#ffbb22';
+    }
+
+    ctx.font = 'bold 11px monospace';
+    ctx.fillStyle = badgeColor;
+    ctx.fillText(badgeText, cx, cy - r - 22);
+
+    ctx.restore();
 }

@@ -16,6 +16,8 @@
 
 import { CONFIG } from '../config.js';
 import { clamp } from '../utils/math.js';
+import state from '../state.js';
+import { emit } from './particle.js';
 
 /**
  * Create a new player entity at world origin.
@@ -40,12 +42,23 @@ export function createPlayer() {
         alive: true,
         boosting: false,
         trailTimer: 0,
+
+        // ── Guns & Ammo System (2,000 rounds / 10 magazines) ──
+        ammoInMag: CONFIG.magCapacity,       // 200 rounds in active mag
+        magsRemaining: CONFIG.maxMags - 1,   // 9 reserve magazines (10 total)
+        reloading: false,                    // true when 10-second reload in progress
+        reloadTimer: 0,                      // countdown timer for active reload
+        reloadDuration: CONFIG.reloadDuration,
+        fireTimer: 0,                        // rate of fire limiter
+
+        // ── Flight Aerodynamics State ───────────────────
+        isTurning: false,
     };
 }
 
 /**
  * Update player state each frame.
- * CG Concept: Kinematic motion — velocity and angular velocity scaled by dt
+ * CG Concept: Kinematic motion with induced aerodynamic drag
  * 
  * @param {object} player
  * @param {number} dt
@@ -54,27 +67,112 @@ export function createPlayer() {
 export function updatePlayer(player, dt, input) {
     if (!player.alive) return;
 
-    // ── Steering (angular velocity) ─────────────────────
+    // ── Steering & Banking (angular velocity) ───────────
+    player.isTurning = !!(input.left || input.right);
     if (input.left) player.heading -= CONFIG.playerTurnRate * dt;
     if (input.right) player.heading += CONFIG.playerTurnRate * dt;
 
+    // ── Fuel Mode Check ─────────────────────────────────
+    const isSurvival = (player.mode || state.gameMode) === 'survival';
+
     // ── Boost ───────────────────────────────────────────
-    player.boosting = input.boost && player.fuel > CONFIG.fuelFloorForBoost;
-    player.speed = player.boosting
+    player.boosting = input.boost && (!isSurvival || player.fuel > CONFIG.fuelFloorForBoost);
+
+    // Target top speed based on engine throttle/boost
+    const targetTopSpeed = player.boosting
         ? CONFIG.playerBaseSpeed * CONFIG.boostMultiplier
         : CONFIG.playerBaseSpeed;
+
+    // ── Physics-Based Speed & Induced Drag ──────────────
+    // CG Concept: Aerodynamic induced drag — banking bleeds forward kinetic energy.
+    // Flying straight allows thrust acceleration back up to maximum velocity.
+    if (player.isTurning) {
+        const turnFloor = targetTopSpeed * CONFIG.minTurnSpeedFactor;
+        player.speed = Math.max(turnFloor, player.speed - CONFIG.turnDragDecel * dt);
+    } else {
+        const accel = player.boosting ? CONFIG.planeBoostAccelRate : CONFIG.planeAccelRate;
+        player.speed = Math.min(targetTopSpeed, player.speed + accel * dt);
+    }
 
     // ── Kinematic Position Integration ──────────────────
     player.x += Math.cos(player.heading) * player.speed * dt;
     player.y += Math.sin(player.heading) * player.speed * dt;
 
-    // ── Fuel Consumption ────────────────────────────────
-    const drainMultiplier = player.boosting ? CONFIG.boostFuelDrainMultiplier : 1;
-    player.fuel -= CONFIG.fuelDrainRate * drainMultiplier * dt;
-    player.fuel = clamp(player.fuel, 0, CONFIG.maxFuel);
+    // ── Gun Reload Countdown ────────────────────────────
+    if (player.reloading) {
+        player.reloadTimer -= dt;
+        if (player.reloadTimer <= 0) {
+            player.reloading = false;
+            player.reloadTimer = 0;
+            player.ammoInMag = CONFIG.magCapacity;
+        }
+    }
 
-    if (player.fuel <= 0) {
-        player.alive = false;
+    if (player.fireTimer > 0) {
+        player.fireTimer -= dt;
+    }
+
+    // ── Machine Gun Firing ('C' key) ────────────────────
+    if (input.fire && !player.reloading && player.fireTimer <= 0) {
+        if (player.ammoInMag > 0) {
+            player.ammoInMag--;
+            player.fireTimer = CONFIG.gunFireRate;
+
+            // Spawn bullet directly at needle radome nose
+            const noseDist = player.radius * 1.75;
+            const noseX = player.x + Math.cos(player.heading) * noseDist;
+            const noseY = player.y + Math.sin(player.heading) * noseDist;
+
+            // Muzzle velocity combined with current dynamic aircraft forward speed
+            const totalBulletSpeed = player.speed + CONFIG.bulletSpeed;
+            const bvx = Math.cos(player.heading) * totalBulletSpeed;
+            const bvy = Math.sin(player.heading) * totalBulletSpeed;
+
+            state.bullets.push({
+                x: noseX,
+                y: noseY,
+                vx: bvx,
+                vy: bvy,
+                heading: player.heading,
+                radius: CONFIG.bulletRadius,
+                life: CONFIG.bulletLife,
+                maxLife: CONFIG.bulletLife,
+                alive: true,
+            });
+
+            // Muzzle flash spark emission
+            emit(noseX, noseY, 2, 'spark', '255,220,100', {
+                speedMin: 35,
+                speedMax: 90,
+                sizeMin: 1.5,
+                sizeMax: 3.2,
+                lifeMin: 0.05,
+                lifeMax: 0.12,
+            });
+
+            // When current magazine empties, start strict 10s reload if magazines remain
+            if (player.ammoInMag <= 0) {
+                if (player.magsRemaining > 0) {
+                    player.reloading = true;
+                    player.reloadTimer = CONFIG.reloadDuration;
+                    player.magsRemaining--;
+                }
+            }
+        }
+    }
+
+    // ── Fuel Consumption ────────────────────────────────
+    // Only deplete fuel in Survival mode; Free Flight provides infinite fuel
+    if (isSurvival) {
+        const drainMultiplier = player.boosting ? CONFIG.boostFuelDrainMultiplier : 1;
+        player.fuel -= CONFIG.fuelDrainRate * drainMultiplier * dt;
+        player.fuel = clamp(player.fuel, 0, CONFIG.maxFuel);
+
+        if (player.fuel <= 0) {
+            player.alive = false;
+        }
+    } else {
+        player.fuel = CONFIG.maxFuel;
     }
 
     // ── Cooldown Timers ─────────────────────────────────
@@ -220,6 +318,40 @@ export function drawPlayer(player, ctx, screenPos) {
         ctx.fill();
         ctx.shadowBlur = 0;
     }
+
+    ctx.restore();
+}
+
+/**
+ * Draw machine gun tracer round.
+ * 
+ * @param {object} bullet
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {{ x: number, y: number }} screenPos
+ */
+export function drawBullet(bullet, ctx, screenPos) {
+    if (!bullet.alive) return;
+
+    ctx.save();
+    ctx.translate(screenPos.x, screenPos.y);
+    ctx.rotate(bullet.heading);
+
+    // Luminous tracer streak glow
+    ctx.shadowColor = '#ffe066';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#fff5cc';
+    ctx.lineWidth = 2.5;
+
+    ctx.beginPath();
+    ctx.moveTo(-11, 0);
+    ctx.lineTo(2, 0);
+    ctx.stroke();
+
+    // Hot tracer incandescent tip
+    ctx.fillStyle = '#ffcc00';
+    ctx.beginPath();
+    ctx.arc(2, 0, 2.2, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
 }
