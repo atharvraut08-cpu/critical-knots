@@ -22,6 +22,7 @@ const state = {
     obstacles: [],
     pickups: [],
     flares: [],             // active flare decoys in the world
+    empWaves: [],           // active expanding electromagnetic pulse shockwaves
 
     // Player reference (set by main.js on game start)
     player: null,
@@ -31,6 +32,9 @@ const state = {
     pickupSpawnTimer: 0,
     flareRegenTimer: 0,
     empRegenTimer: 0,
+
+    // HUD effect timers
+    hudGlitchTimer: 0,      // digital static distortion countdown
 
     // Stats for score screen
     stats: {
@@ -58,6 +62,7 @@ export function reset() {
     state.obstacles.length = 0;
     state.pickups.length = 0;
     state.flares.length = 0;
+    state.empWaves.length = 0;
 
     state.player = null;
 
@@ -65,6 +70,7 @@ export function reset() {
     state.pickupSpawnTimer = CONFIG.pickupSpawnInterval;
     state.flareRegenTimer = 0;
     state.empRegenTimer = 0;
+    state.hudGlitchTimer = 0;
 
     state.stats.timeSurvived = 0;
     state.stats.missilesDestroyed = 0;

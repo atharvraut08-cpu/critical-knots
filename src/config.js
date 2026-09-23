@@ -10,7 +10,7 @@ export const CONFIG = {
     playerBaseSpeed: 220,       // px/s cruise speed
     playerTurnRate: 2.2,        // rad/s
     playerRadius: 14,           // collision radius
-    boostMultiplier: 1.6,       // speed × this while boosting
+    boostMultiplier: 1.6,       // speed × this while boosting (352 px/s)
     boostFuelDrainMultiplier: 2.5, // fuel drain × this while boosting
 
     // ── Fuel ────────────────────────────────────────────
@@ -20,37 +20,99 @@ export const CONFIG = {
     fuelFloorForBoost: 5,       // boost silently disabled below this
 
     // ── Missiles ────────────────────────────────────────
-    warmupTime: 4,              // seconds before first missile
-    spawnIntervalStart: 3.5,    // seconds between spawns at t=0
-    spawnIntervalFloor: 0.8,    // minimum spawn interval
-    spawnIntervalHalfLife: 25,  // interval halves every N seconds of survival
+    warmupTime: 3.5,            // seconds before first missile
+    spawnIntervalStart: 3.2,    // seconds between spawns at t=0
+    spawnIntervalFloor: 0.75,   // minimum spawn interval
+    spawnIntervalHalfLife: 22,  // interval halves every N seconds of survival
     spawnRingMargin: 200,       // spawn this far beyond camera cull radius
-    minSpawnDistFromPlayer: 400,// never spawn closer than this to player
+    minSpawnDistFromPlayer: 450,// never spawn closer than this to player
 
-    homingSpeed: 160,           // px/s
-    homingTurnRate: 1.1,        // rad/s
-    homingRadius: 8,            // collision radius
+    // Missile Archetypes:
+    // - standard (Sidewinder): balanced heatseeker, matches cruise speed
+    // - heavy (Titan): slow, high agility/turn-rate, thick smoke, large explosion
+    // - fast (Falcon): 295 px/s, faster than player cruise speed (220)
+    // - hyper (Viper): 385 px/s, faster than player boost (352), high inertia
+    missileTypes: {
+        standard: {
+            name: 'Sidewinder',
+            baseSpeed: 215,
+            maxSpeed: 235,
+            accel: 55,
+            turnRate: 1.25,
+            radius: 8,
+            color: '#ff3344',
+            hudDot: '#ff4455',
+            smokeColor: '200,200,210',
+            trailRate: 0.025,
+        },
+        heavy: {
+            name: 'Titan',
+            baseSpeed: 130,
+            maxSpeed: 155,
+            accel: 30,
+            turnRate: 1.85,
+            radius: 12,
+            color: '#cc1122',
+            hudDot: '#ff2233',
+            smokeColor: '70,70,80',
+            trailRate: 0.018,
+        },
+        fast: {
+            name: 'Falcon',
+            baseSpeed: 250,
+            maxSpeed: 295,
+            accel: 90,
+            turnRate: 0.85,
+            radius: 7,
+            color: '#ff7700',
+            hudDot: '#ff9900',
+            smokeColor: '230,170,100',
+            trailRate: 0.02,
+        },
+        hyper: {
+            name: 'Viper',
+            baseSpeed: 280,
+            maxSpeed: 385,
+            accel: 135,
+            turnRate: 0.42,
+            radius: 6,
+            color: '#e022ff',
+            hudDot: '#f033ff',
+            smokeColor: '200,120,255',
+            trailRate: 0.015,
+        },
+    },
 
-    rocketSpeed: 260,           // px/s
-    rocketTurnRate: 0,          // unguided — locks heading at spawn
+    // Legacy fallbacks
+    homingSpeed: 215,
+    homingTurnRate: 1.25,
+    homingRadius: 8,
+    rocketSpeed: 295,
+    rocketTurnRate: 0,
     rocketRadius: 7,
 
-    // Archetype mix: fraction of homing missiles
-    archetypeMixStart: 0.80,    // 80% homing at start
-    archetypeMixEnd: 0.50,      // 50% homing at 90s
-    archetypeMixTransitionTime: 90, // seconds to reach end mix
-
-    // ── Countermeasures ─────────────────────────────────
+    // ── Countermeasures: Flares ─────────────────────────
     maxFlares: 3,
-    flareRegenTime: 20,         // seconds to regen 1 charge
-    flareConfuseRadius: 180,    // px
-    flareConfuseDuration: 2.5,  // seconds
-    flareCooldown: 0.5,         // seconds between uses
+    flareRegenTime: 18,         // seconds to regen 1 charge
+    flareCooldown: 0.6,         // seconds between uses
+    flareEjectionSpeed: 130,    // px/s rearward/lateral ejection velocity
+    flareDrag: 1.8,             // aerodynamic drag deceleration
+    flareBurnDuration: 3.5,     // seconds of active burn
+    flareSparkRate: 0.025,      // seconds between spark emissions
+    flareSmokeRate: 0.04,       // seconds between smoke emissions
+    flareSeekerFov: 1.35,       // ~77 deg seeker cone
+    flareDetectionRadius: 450,  // px range to distract missiles
+    flareAttractionChance: 0.88,// base chance to break missile lock
 
+    // ── Countermeasures: EMP ────────────────────────────
     maxEmp: 1,
-    empRegenTime: 45,           // seconds to regen 1 charge
-    empKillRadius: 260,         // px
-    empCooldown: 1.0,           // seconds between uses
+    empRegenTime: 40,           // seconds to regen 1 charge
+    empCooldown: 1.2,           // seconds between uses
+    empRadius: 380,             // maximum pulse expansion radius, px
+    empExpansionSpeed: 640,     // wave expansion speed, px/s
+    empDisruptDurationMin: 2.5, // seconds disabled at edge
+    empDisruptDurationMax: 4.5, // seconds disabled at epicenter
+    empHudGlitchDuration: 0.55, // seconds of HUD static / digital noise
 
     // ── Camera ──────────────────────────────────────────
     cameraFollowSpeed: 4.0,     // lerp factor
@@ -63,26 +125,27 @@ export const CONFIG = {
     skyColorDay:   [135, 206, 235],  // light sky blue
     skyColorDusk:  [255, 140, 66],   // warm orange
     skyColorNight: [15, 15, 40],     // deep dark blue
-    skyHorizonLighten: 34,      // how much lighter the horizon band is vs the zenith (gradient depth)
+    skyHorizonLighten: 34,      // how much lighter the horizon band is vs the zenith
     celestialRadius: 46,        // sun/moon disc radius, px
     celestialGlowRadius: 150,   // sun/moon outer glow radius, px
     celestialArcHeight: 0.55,   // fraction of canvas height the sun/moon arcs through
     starTwinkleSpeed: 1.8,      // twinkle oscillation speed, rad/s
+    altitudeShadowOffset: 16,   // px offset for aircraft & missile drop shadows
 
     // ── Particles ───────────────────────────────────────
-    maxParticles: 300,          // pre-allocated pool size
-    smokeLifeMin: 0.3,         // seconds
+    maxParticles: 500,          // pre-allocated pool size
+    smokeLifeMin: 0.3,          // seconds
     smokeLifeMax: 0.8,
     explosionLifeMin: 0.4,
-    explosionLifeMax: 1.0,
-    explosionParticleCount: 25, // particles per explosion burst
+    explosionLifeMax: 1.1,
+    explosionParticleCount: 30, // particles per explosion burst
     trailEmitRate: 0.03,        // seconds between trail particle spawns
 
-    // ── Obstacles ───────────────────────────────────────
-    obstacleCount: 15,          // number of obstacles to scatter in play area
-    obstacleSpawnRadius: 2000,  // scatter within this world radius
-    obstacleMinRadius: 25,
-    obstacleMaxRadius: 55,
+    // ── Environmental Obstacles ─────────────────────────
+    obstacleCount: 16,          // total number of environmental obstacles
+    obstacleSpawnRadius: 2200,  // scatter within this world radius
+    obstacleMinRadius: 40,
+    obstacleMaxRadius: 110,
 
     // ── Pickups ─────────────────────────────────────────
     pickupSpawnInterval: 12,    // seconds between fuel canister spawns
@@ -91,14 +154,26 @@ export const CONFIG = {
 
     // ── Parallax ────────────────────────────────────────
     parallaxLayers: [
-        { factor: 0.1, count: 60, sizeMin: 1, sizeMax: 2, color: 'rgba(255,255,255,0.4)', twinkle: true },  // distant stars
-        { factor: 0.3, count: 30, sizeMin: 2, sizeMax: 5, color: 'rgba(200,200,220,0.25)' },  // mid clouds
-        { factor: 0.5, count: 15, sizeMin: 4, sizeMax: 8, color: 'rgba(180,180,200,0.15)' },  // near details
+        { factor: 0.08, count: 50, sizeMin: 1, sizeMax: 2, color: 'rgba(255,255,255,0.4)', twinkle: true }, // stars
+        { factor: 0.25, count: 25, sizeMin: 40, sizeMax: 90, color: 'rgba(255,255,255,0.18)', isCloud: true }, // high cirrus
+        { factor: 0.45, count: 18, sizeMin: 70, sizeMax: 150, color: 'rgba(240,245,255,0.22)', isCloud: true }, // mid cumulus
     ],
-    parallaxTileSize: 2000,     // world units per tile repeat
+    parallaxTileSize: 2400,     // world units per tile repeat
 
     // ── Scoring ─────────────────────────────────────────
-    nearMissRadius: 50,         // px — counts as a "near miss" for stats
+    nearMissRadius: 55,         // px — counts as a "near miss" for stats
+
+    // ── Minimap / Radar ─────────────────────────────────
+    minimapWidth: 155,          // px
+    minimapHeight: 155,         // px
+    minimapMargin: 20,          // px from canvas border
+    minimapWorldRange: 2200,    // world units from player to minimap edge
+    minimapBgColor: 'rgba(10, 15, 28, 0.65)',
+    minimapBorderColor: 'rgba(96, 213, 255, 0.4)',
+    minimapGridColor: 'rgba(255, 255, 255, 0.08)',
+    minimapDotPlayer: '#ffffff',
+    minimapDotPickup: '#22cc77',
+    minimapDotObstacle: '#8899aa',
 
     // ── Internal Resolution ─────────────────────────────
     canvasWidth: 1280,

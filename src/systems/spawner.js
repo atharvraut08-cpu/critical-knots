@@ -1,10 +1,10 @@
 /**
- * spawner.js — Missile, pickup, and obstacle spawn logic + difficulty curve
+ * spawner.js — Threat escalation spawner & clustered terrain generation
  * 
- * A single module owns all spawn timing so the difficulty curve is
- * tunable in one place via CONFIG. Missiles spawn on a ring just
- * outside the camera's culling radius, at a random angle, heading
- * roughly toward the player's current position at spawn time.
+ * Manages:
+ * - Dynamic missile archetype escalation based on survival time
+ * - Realistic terrain generation: clustered mountain ridges, canyons, and radar towers
+ * - Fuel canister distribution
  */
 
 import { CONFIG } from '../config.js';
@@ -17,10 +17,9 @@ import { createPickup } from '../entities/pickup.js';
 /**
  * Compute current missile spawn interval based on survival time.
  * Exponential decay: interval halves every CONFIG.spawnIntervalHalfLife seconds.
- * Floor at CONFIG.spawnIntervalFloor.
  * 
- * @param {number} timeAlive - seconds survived
- * @returns {number} spawn interval in seconds
+ * @param {number} timeAlive
+ * @returns {number} seconds
  */
 export function getSpawnInterval(timeAlive) {
     const decayFactor = Math.pow(0.5, timeAlive / CONFIG.spawnIntervalHalfLife);
@@ -29,22 +28,36 @@ export function getSpawnInterval(timeAlive) {
 }
 
 /**
- * Compute current missile archetype mix.
- * Linearly transitions from archetypeMixStart to archetypeMixEnd
- * over archetypeMixTransitionTime seconds.
+ * Select a missile archetype based on current survival time.
+ * Progressively introduces more lethal and specialized missile threats.
  * 
  * @param {number} timeAlive
- * @returns {number} probability of homing missile (0-1)
+ * @returns {'standard'|'heavy'|'fast'|'hyper'}
  */
-function getHomingProbability(timeAlive) {
-    const t = Math.min(timeAlive / CONFIG.archetypeMixTransitionTime, 1);
-    return CONFIG.archetypeMixStart + (CONFIG.archetypeMixEnd - CONFIG.archetypeMixStart) * t;
+export function getMissileArchetype(timeAlive) {
+    const roll = Math.random();
+
+    if (timeAlive < 15) {
+        // Early game: mostly standard Sidewinders
+        return roll < 0.75 ? 'standard' : 'heavy';
+    } else if (timeAlive < 40) {
+        // Mid game: Sidewinders, Heavy Titans, and Fast Falcons
+        if (roll < 0.40) return 'standard';
+        if (roll < 0.75) return 'fast';
+        return 'heavy';
+    } else {
+        // Late game: All 4 types, with dangerous Hypersonic Vipers
+        if (roll < 0.30) return 'standard';
+        if (roll < 0.55) return 'fast';
+        if (roll < 0.75) return 'heavy';
+        return 'hyper'; // 25% Hypersonic threats
+    }
 }
 
 /**
- * Update spawner timers and spawn entities as needed.
+ * Update spawner timers and spawn entities.
  * 
- * @param {object} state - game state
+ * @param {object} state
  * @param {number} dt
  * @param {number} canvasW
  * @param {number} canvasH
@@ -53,14 +66,14 @@ export function updateSpawner(state, dt, canvasW, canvasH) {
     const player = state.player;
     if (!player || !player.alive) return;
 
-    // ── Missile spawning ────────────────────────────────
+    // ── Missile Spawning ────────────────────────────────
     state.missileSpawnTimer -= dt;
     if (state.missileSpawnTimer <= 0) {
         spawnMissile(state, player, canvasW, canvasH);
         state.missileSpawnTimer = getSpawnInterval(state.timeAlive);
     }
 
-    // ── Fuel canister spawning ──────────────────────────
+    // ── Fuel Canister Spawning ──────────────────────────
     state.pickupSpawnTimer -= dt;
     if (state.pickupSpawnTimer <= 0) {
         spawnPickup(state, player);
@@ -69,35 +82,30 @@ export function updateSpawner(state, dt, canvasW, canvasH) {
 }
 
 /**
- * Spawn a missile on a ring outside the camera cull radius.
- * Risk #3 mitigation: enforce minimum spawn distance from player.
+ * Spawn a missile on the perimeter ring outside camera culling.
  */
 function spawnMissile(state, player, canvasW, canvasH) {
     const maxDim = Math.max(canvasW, canvasH);
     const spawnDist = maxDim * CONFIG.cameraCullFactor + CONFIG.spawnRingMargin;
 
-    // Random angle around the player
+    // Random angle around player
     const angle = randRange(0, Math.PI * 2);
     const x = player.x + Math.cos(angle) * spawnDist;
     const y = player.y + Math.sin(angle) * spawnDist;
 
-    // Verify minimum distance (Risk #3)
     if (distance({ x, y }, player) < CONFIG.minSpawnDistFromPlayer) {
-        return; // skip this spawn, will retry next interval
+        return;
     }
 
-    // Heading: point roughly toward the player at spawn time
-    const heading = angleTo({ x, y }, player);
-
-    // Archetype selection based on difficulty curve
-    const homingProb = getHomingProbability(state.timeAlive);
-    const type = Math.random() < homingProb ? 'homing' : 'rocket';
+    // Initial heading roughly directed at the player
+    const heading = angleTo({ x, y }, player) + randRange(-0.25, 0.25);
+    const type = getMissileArchetype(state.timeAlive);
 
     state.missiles.push(createMissile(x, y, heading, type));
 }
 
 /**
- * Spawn a fuel canister ahead of the player's current heading.
+ * Spawn fuel canister ahead of player flight corridor.
  */
 function spawnPickup(state, player) {
     const dist = randRange(CONFIG.pickupSpawnRadius * 0.5, CONFIG.pickupSpawnRadius);
@@ -110,20 +118,58 @@ function spawnPickup(state, player) {
 }
 
 /**
- * Scatter initial obstacles in the world around origin.
- * Called once at game start.
+ * Scatter believable clustered terrain formations in the world.
+ * Generates mountain ridge chains (creating canyon navigation corridors),
+ * high-altitude communications towers, and mesa plateaus.
  * 
  * @param {object} state
  */
 export function scatterObstacles(state) {
-    for (let i = 0; i < CONFIG.obstacleCount; i++) {
-        const angle = randRange(0, Math.PI * 2);
-        const dist = randRange(300, CONFIG.obstacleSpawnRadius);
+    state.obstacles.length = 0;
+
+    // ── 1. Mountain Ridge Chains (Natural Flight Canyons) ─
+    const chainCount = 3;
+    for (let c = 0; c < chainCount; c++) {
+        const chainAngle = (c / chainCount) * Math.PI * 2 + randRange(-0.4, 0.4);
+        const chainDist = randRange(450, CONFIG.obstacleSpawnRadius * 0.7);
+        let curX = Math.cos(chainAngle) * chainDist;
+        let curY = Math.sin(chainAngle) * chainDist;
+
+        const ridgeHeading = chainAngle + Math.PI / 2 + randRange(-0.3, 0.3);
+        const peaksInChain = randInt(3, 4);
+
+        for (let p = 0; p < peaksInChain; p++) {
+            const size = randRange(CONFIG.obstacleMinRadius + 15, CONFIG.obstacleMaxRadius);
+            state.obstacles.push(createObstacle(curX, curY, 'mountain', size));
+
+            // Step along ridge corridor
+            const stepDist = size * 1.5;
+            curX += Math.cos(ridgeHeading) * stepDist + randRange(-30, 30);
+            curY += Math.sin(ridgeHeading) * stepDist + randRange(-30, 30);
+        }
+    }
+
+    // ── 2. Strategic Communications & Radar Towers ──────
+    const towerCount = 5;
+    for (let i = 0; i < towerCount; i++) {
+        const angle = (i / towerCount) * Math.PI * 2 + randRange(0.2, 0.6);
+        const dist = randRange(350, CONFIG.obstacleSpawnRadius * 0.85);
         const x = Math.cos(angle) * dist;
         const y = Math.sin(angle) * dist;
-        const size = randRange(CONFIG.obstacleMinRadius, CONFIG.obstacleMaxRadius);
-        const shape = Math.random() < 0.4 ? 'aabb' : 'circle';
+        const size = randRange(45, 65);
 
-        state.obstacles.push(createObstacle(x, y, shape, size));
+        state.obstacles.push(createObstacle(x, y, 'tower', size));
+    }
+
+    // ── 3. Mesa / Cliff Formations ──────────────────────
+    const cliffCount = 4;
+    for (let i = 0; i < cliffCount; i++) {
+        const angle = randRange(0, Math.PI * 2);
+        const dist = randRange(500, CONFIG.obstacleSpawnRadius);
+        const x = Math.cos(angle) * dist;
+        const y = Math.sin(angle) * dist;
+        const size = randRange(60, 95);
+
+        state.obstacles.push(createObstacle(x, y, 'cliff', size));
     }
 }

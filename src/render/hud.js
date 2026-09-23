@@ -205,6 +205,14 @@ export function drawHUD(ctx, w, h, state) {
         ctx.fillText('» BOOST «', w / 2, margin + 30);
     }
 
+    // ── Minimap / Radar (bottom-right) ──────────────────
+    drawMinimap(ctx, w, h, state);
+
+    // ── EMP Avionics Glitch / Static Overlay ────────────
+    if (state.hudGlitchTimer > 0) {
+        drawHUDGlitch(ctx, w, h, state.hudGlitchTimer);
+    }
+
     // ── Paused overlay ──────────────────────────────────
     if (state.paused) {
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -218,6 +226,217 @@ export function drawHUD(ctx, w, h, state) {
         ctx.font = '16px "Segoe UI", Arial, sans-serif';
         ctx.fillText('Press P to resume', w / 2, h / 2 + 40);
     }
+}
+
+/**
+ * Render brief digital scanlines and electromagnetic glitch static across the HUD on EMP pulse.
+ */
+function drawHUDGlitch(ctx, w, h, timer) {
+    const intensity = Math.min(timer / CONFIG.empHudGlitchDuration, 1);
+    ctx.save();
+
+    // 1. Semi-transparent cyan/blue surge vignette
+    ctx.fillStyle = `rgba(80, 200, 255, ${intensity * 0.12})`;
+    ctx.fillRect(0, 0, w, h);
+
+    // 2. Horizontal digital scanline noise slices
+    const bandCount = Math.floor(6 + Math.random() * 8);
+    for (let i = 0; i < bandCount; i++) {
+        const by = Math.random() * h;
+        const bh = 2 + Math.random() * 8;
+        const alpha = Math.random() * 0.18 * intensity;
+        ctx.fillStyle = Math.random() > 0.5 ? `rgba(120, 220, 255, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillRect(0, by, w, bh);
+    }
+
+    // 3. EMP discharge warning banner
+    if (intensity > 0.25) {
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = `rgba(100, 220, 255, ${intensity * 0.85})`;
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡ EMP DISCHARGE // AVIONICS SURGE ⚡', w / 2, h * 0.18);
+    }
+
+    ctx.restore();
+}
+
+/**
+ * Map absolute world coordinates into localized minimap viewport coordinates.
+ * CG Concept: Window-to-Viewport coordinate transformation (affine mapping)
+ * 
+ * Maps world coordinates from a viewing window centered on the player:
+ *   [playerX - worldRange, playerX + worldRange] x [playerY - worldRange, playerY + worldRange]
+ * to the screen-space minimap viewport:
+ *   [vx, vx + vw] x [vy, vy + vh]
+ *
+ * @param {number} worldX
+ * @param {number} worldY
+ * @param {number} playerX
+ * @param {number} playerY
+ * @param {number} worldRange
+ * @param {number} vx
+ * @param {number} vy
+ * @param {number} vw
+ * @param {number} vh
+ * @returns {{ x: number, y: number, inBounds: boolean }}
+ */
+export function worldToMinimap(worldX, worldY, playerX, playerY, worldRange, vx, vy, vw, vh) {
+    // CG Concept: Window-to-viewport coordinate transformation
+    const windowMinX = playerX - worldRange;
+    const windowMinY = playerY - worldRange;
+    const windowSpan = worldRange * 2;
+
+    const tx = (worldX - windowMinX) / windowSpan;
+    const ty = (worldY - windowMinY) / windowSpan;
+
+    const inBounds = tx >= 0 && tx <= 1 && ty >= 0 && ty <= 1;
+
+    return {
+        x: vx + tx * vw,
+        y: vy + ty * vh,
+        inBounds,
+    };
+}
+
+/**
+ * Draw the tactical radar minimap in the bottom-right corner.
+ * CG Concept: Window-to-Viewport transformation + Viewport Clipping
+ * 
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w - canvas width
+ * @param {number} h - canvas height
+ * @param {object} state - global game state
+ */
+export function drawMinimap(ctx, w, h, state) {
+    const player = state.player;
+    if (!player) return;
+
+    const mw = CONFIG.minimapWidth;
+    const mh = CONFIG.minimapHeight;
+    const margin = CONFIG.minimapMargin;
+    const range = CONFIG.minimapWorldRange;
+
+    // Viewport coordinates in bottom-right corner
+    const vx = w - mw - margin;
+    const vy = h - mh - margin;
+
+    ctx.save();
+
+    // ── Semi-transparent background ─────────────────────
+    ctx.fillStyle = CONFIG.minimapBgColor;
+    ctx.fillRect(vx, vy, mw, mh);
+
+    // ── Coordinate grid / crosshairs ────────────────────
+    ctx.strokeStyle = CONFIG.minimapGridColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(vx + mw / 2, vy);
+    ctx.lineTo(vx + mw / 2, vy + mh);
+    ctx.moveTo(vx, vy + mh / 2);
+    ctx.lineTo(vx + mw, vy + mh / 2);
+    ctx.stroke();
+
+    // Concentric range ring at half range
+    ctx.beginPath();
+    ctx.arc(vx + mw / 2, vy + mh / 2, mw / 4, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // ── Viewport clipping for internal blips ────────────
+    ctx.beginPath();
+    ctx.rect(vx, vy, mw, mh);
+    ctx.clip();
+
+    // ── 1. Obstacles (gray/stone dots) ───────────────────
+    ctx.fillStyle = CONFIG.minimapDotObstacle;
+    for (let i = 0; i < state.obstacles.length; i++) {
+        const obs = state.obstacles[i];
+        if (!obs.alive) continue;
+        const pt = worldToMinimap(obs.x, obs.y, player.x, player.y, range, vx, vy, mw, mh);
+        if (!pt.inBounds) continue;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, obs.type === 'mountain' ? 3.5 : 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // ── 2. Fuel pickups (green dots) ────────────────────
+    ctx.fillStyle = CONFIG.minimapDotPickup;
+    for (let i = 0; i < state.pickups.length; i++) {
+        const pk = state.pickups[i];
+        if (!pk.alive) continue;
+        const pt = worldToMinimap(pk.x, pk.y, player.x, player.y, range, vx, vy, mw, mh);
+        if (!pt.inBounds) continue;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // ── 3. Flares (yellow decoy dots) ───────────────────
+    ctx.fillStyle = '#ffcc00';
+    for (let i = 0; i < state.flares.length; i++) {
+        const f = state.flares[i];
+        if (!f.alive) continue;
+        const pt = worldToMinimap(f.x, f.y, player.x, player.y, range, vx, vy, mw, mh);
+        if (!pt.inBounds) continue;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 2.0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    // ── 4. Missiles (color-coded by archetype) ──────────
+    for (let i = 0; i < state.missiles.length; i++) {
+        const m = state.missiles[i];
+        if (!m.alive) continue;
+        const pt = worldToMinimap(m.x, m.y, player.x, player.y, range, vx, vy, mw, mh);
+        if (!pt.inBounds) continue;
+
+        const def = CONFIG.missileTypes[m.type] || CONFIG.missileTypes.standard;
+        const dotColor = m.disabledTimer > 0 ? '#44aaff' : (def.hudDot || '#ff4455');
+        const dotRadius = m.type === 'heavy' ? 3.8 : (m.type === 'hyper' ? 3.2 : 2.5);
+
+        ctx.fillStyle = dotColor;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // High-threat ring for Hyper and Heavy
+        if (m.type === 'hyper' && m.disabledTimer <= 0) {
+            ctx.strokeStyle = '#ff33ff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, dotRadius + 2.5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
+    // ── 5. Player (white dot at center + heading line) ──
+    const playerPt = worldToMinimap(player.x, player.y, player.x, player.y, range, vx, vy, mw, mh);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(playerPt.x, playerPt.y);
+    ctx.lineTo(
+        playerPt.x + Math.cos(player.heading) * 9,
+        playerPt.y + Math.sin(player.heading) * 9
+    );
+    ctx.stroke();
+
+    ctx.fillStyle = CONFIG.minimapDotPlayer;
+    ctx.beginPath();
+    ctx.arc(playerPt.x, playerPt.y, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // ── Minimap border & label ──────────────────────────
+    ctx.strokeStyle = CONFIG.minimapBorderColor;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(vx, vy, mw, mh);
+
+    // Subtle label above the minimap
+    ctx.fillStyle = 'rgba(96, 213, 255, 0.7)';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('RADAR', vx + mw, vy - 4);
 }
 
 /**

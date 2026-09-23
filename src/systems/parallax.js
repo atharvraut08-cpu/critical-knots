@@ -1,5 +1,5 @@
 /**
- * parallax.js — Multi-layer parallax background
+ * parallax.js — Multi-layer parallax background with atmospheric clouds and stars
  * 
  * CG Concept: Parallax Scrolling
  * Multiple background layers move at different speeds relative to
@@ -7,8 +7,8 @@
  * Each layer has a layerFactor < 1 — smaller values appear more
  * distant and move slower, simulating depth through differential motion.
  * 
- * Layers are tiled procedurally with seeded pseudo-random placement,
- * wrapped modulo tileSize, so the background repeats seamlessly.
+ * High-altitude clouds feature soft volumetric puff clusters with
+ * sunlight illumination, seamlessly wrapped modulo tileSize.
  */
 
 import { CONFIG } from '../config.js';
@@ -18,28 +18,43 @@ const layers = [];
 
 /**
  * Initialize parallax layers with pseudo-random element placement.
- * Call once at game start. Elements are placed within a tile that
- * repeats modulo tileSize for seamless wrapping.
  */
 export function initParallax() {
     layers.length = 0;
     for (const layerDef of CONFIG.parallaxLayers) {
         const elements = [];
         const tileSize = CONFIG.parallaxTileSize;
+
         for (let i = 0; i < layerDef.count; i++) {
+            const size = layerDef.sizeMin + Math.random() * (layerDef.sizeMax - layerDef.sizeMin);
+
+            // If this is a cloud layer, generate a cluster of soft sub-puffs
+            const puffs = [];
+            if (layerDef.isCloud) {
+                const puffCount = 3 + Math.floor(Math.random() * 3);
+                for (let p = 0; p < puffCount; p++) {
+                    puffs.push({
+                        ox: (Math.random() - 0.5) * size * 0.9,
+                        oy: (Math.random() - 0.5) * size * 0.5,
+                        r: size * (0.45 + Math.random() * 0.4),
+                    });
+                }
+            }
+
             elements.push({
-                // Position within the repeating tile [0, tileSize)
                 tx: Math.random() * tileSize,
                 ty: Math.random() * tileSize,
-                size: layerDef.sizeMin + Math.random() * (layerDef.sizeMax - layerDef.sizeMin),
-                // Per-element phase offset so twinkling elements don't flash in unison
+                size,
                 phase: Math.random() * Math.PI * 2,
+                puffs,
             });
         }
+
         layers.push({
             factor: layerDef.factor,
             color: layerDef.color,
             twinkle: !!layerDef.twinkle,
+            isCloud: !!layerDef.isCloud,
             elements,
         });
     }
@@ -47,9 +62,7 @@ export function initParallax() {
 
 /**
  * Draw parallax background layers.
- * CG Concept: Parallax scrolling — each layer offsets by
- * -camera * layerFactor, where layerFactor < 1 for distant layers.
- * This creates the illusion of depth through differential motion speeds.
+ * CG Concept: Parallax scrolling — layerFactor determines perceived depth
  * 
  * @param {CanvasRenderingContext2D} ctx
  * @param {object} camera - { x, y }
@@ -61,8 +74,6 @@ export function drawParallax(ctx, camera, canvasW, canvasH) {
     const now = Date.now() / 1000;
 
     for (const layer of layers) {
-        // Compute which tile region is visible
-        // CG Concept: Parallax scrolling — layerFactor determines perceived depth
         const startTileX = Math.floor((camera.x * layer.factor - canvasW / 2) / tileSize);
         const startTileY = Math.floor((camera.y * layer.factor - canvasH / 2) / tileSize);
         const endTileX = startTileX + 2;
@@ -70,30 +81,39 @@ export function drawParallax(ctx, camera, canvasW, canvasH) {
 
         ctx.fillStyle = layer.color;
 
-        // Render visible tiles
         for (let tx = startTileX; tx <= endTileX; tx++) {
             for (let ty = startTileY; ty <= endTileY; ty++) {
                 for (const elem of layer.elements) {
                     const worldX = tx * tileSize + elem.tx;
                     const worldY = ty * tileSize + elem.ty;
 
-                    // Screen position with parallax offset
                     const sx = worldX - camera.x * layer.factor + canvasW / 2;
                     const sy = worldY - camera.y * layer.factor + canvasH / 2;
 
-                    // Skip off-screen
-                    if (sx < -10 || sx > canvasW + 10 ||
-                        sy < -10 || sy > canvasH + 10) continue;
+                    const bound = elem.size * 1.6;
+                    if (sx < -bound || sx > canvasW + bound || sy < -bound || sy > canvasH + bound) continue;
 
-                    // Twinkle: per-star phase-offset sine wave modulates opacity
-                    // so stars don't all flash in unison.
-                    ctx.globalAlpha = layer.twinkle
-                        ? 0.5 + 0.5 * Math.sin(now * CONFIG.starTwinkleSpeed + elem.phase)
-                        : 1;
+                    if (layer.isCloud) {
+                        // Soft volumetric cloud puffs
+                        ctx.save();
+                        ctx.fillStyle = layer.color;
 
-                    ctx.beginPath();
-                    ctx.arc(sx, sy, elem.size, 0, Math.PI * 2);
-                    ctx.fill();
+                        for (const puff of elem.puffs) {
+                            ctx.beginPath();
+                            ctx.arc(sx + puff.ox, sy + puff.oy, puff.r, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        ctx.restore();
+                    } else {
+                        // Twinkling stars
+                        ctx.globalAlpha = layer.twinkle
+                            ? 0.4 + 0.6 * Math.sin(now * CONFIG.starTwinkleSpeed + elem.phase)
+                            : 1;
+
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, elem.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
                 }
             }
         }

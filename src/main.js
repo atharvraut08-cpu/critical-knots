@@ -141,7 +141,7 @@ function update(dt) {
 
     // Update missiles
     for (const m of state.missiles) {
-        updateMissile(m, dt, player, state.timeAlive);
+        updateMissile(m, dt, player, state.flares, state.timeAlive);
     }
 
     // Countermeasures (flare + EMP)
@@ -176,13 +176,13 @@ function update(dt) {
     // Emit missile smoke trails
     for (const m of state.missiles) {
         if (!m.alive) continue;
-        // trailTimer is decremented once per frame inside updateMissile()
         if (m.trailTimer <= 0) {
             const tailX = m.x - Math.cos(m.heading) * m.radius;
             const tailY = m.y - Math.sin(m.heading) * m.radius;
-            emitTrail(tailX, tailY, m.heading,
-                m.type === 'homing' ? '200,100,80' : '200,150,80');
-            m.trailTimer = CONFIG.trailEmitRate * 1.5;
+            const mDef = CONFIG.missileTypes[m.type] || CONFIG.missileTypes.standard;
+            const trailColor = m.disabledTimer > 0 ? '120,180,220' : mDef.smokeColor;
+            emitTrail(tailX, tailY, m.heading, trailColor);
+            m.trailTimer = mDef.trailRate || (CONFIG.trailEmitRate * 1.5);
         }
     }
 
