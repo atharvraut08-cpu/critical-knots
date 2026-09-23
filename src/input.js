@@ -1,34 +1,36 @@
 /**
- * input.js — Keyboard listeners → input state map
+ * input.js — Keyboard & Mouse listeners → input state map
  * 
- * Maps keyboard events to a clean input state object.
- * Supports both arrow keys and WASD.
- * Handles debounced actions (restart, flare, emp, pause).
+ * Supports both arrow keys, WASD, and mouse buttons.
+ * Handles debounced actions (restart, flare, emp, missile, pause, scoreboard).
  */
 
 const keys = {
     left: false,
     right: false,
     boost: false,
-    fire: false,     // continuous / held action (C key)
-    flare: false,    // single-press action (Q key)
-    emp: false,      // single-press action (E key)
-    restart: false,  // single-press action (Space or R)
-    pause: false,    // single-press action (P key)
-    start: false,    // single-press action (Space to start)
+    fire: false,        // continuous / held action (C key or Left Mouse Button)
+    missile: false,     // single-press action (F key, Space, or Right Mouse Button)
+    flare: false,       // single-press action (Q key)
+    emp: false,         // single-press action (E key)
+    restart: false,     // single-press action (Space or R)
+    pause: false,       // single-press action (P key)
+    start: false,       // single-press action (Space or Enter to start)
+    scoreboard: false,  // held action (Tab key)
 };
 
 // Track which action keys have been consumed this frame
 const consumed = {
     flare: false,
     emp: false,
+    missile: false,
     restart: false,
     pause: false,
     start: false,
 };
 
 /**
- * Initialize keyboard listeners on the window.
+ * Initialize keyboard & mouse listeners on the window.
  * Call once during game bootstrap.
  */
 export function initInput() {
@@ -49,11 +51,15 @@ export function initInput() {
             case 'KeyC':
                 keys.fire = true;
                 break;
+            case 'KeyF':
+                if (!consumed.missile) keys.missile = true;
+                break;
             case 'KeyQ':
                 if (!consumed.flare) keys.flare = true;
                 break;
             case 'Space':
                 e.preventDefault();
+                if (!consumed.missile) keys.missile = true;
                 if (!consumed.start) keys.start = true;
                 if (!consumed.restart) keys.restart = true;
                 break;
@@ -65,6 +71,10 @@ export function initInput() {
                 break;
             case 'KeyP':
                 if (!consumed.pause) keys.pause = true;
+                break;
+            case 'Tab':
+                e.preventDefault();
+                keys.scoreboard = true;
                 break;
         }
     });
@@ -86,10 +96,14 @@ export function initInput() {
             case 'KeyC':
                 keys.fire = false;
                 break;
+            case 'KeyF':
+                consumed.missile = false;
+                break;
             case 'KeyQ':
                 consumed.flare = false;
                 break;
             case 'Space':
+                consumed.missile = false;
                 consumed.start = false;
                 consumed.restart = false;
                 break;
@@ -102,13 +116,39 @@ export function initInput() {
             case 'KeyP':
                 consumed.pause = false;
                 break;
+            case 'Tab':
+                keys.scoreboard = false;
+                break;
         }
     });
+
+    // Mouse Controls
+    window.addEventListener('mousedown', (e) => {
+        if (e.button === 0) { // Left click: fire machine guns
+            keys.fire = true;
+        } else if (e.button === 2) { // Right click: fire wing missile
+            e.preventDefault();
+            if (!consumed.missile) keys.missile = true;
+        }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+        if (e.button === 0) {
+            keys.fire = false;
+        } else if (e.button === 2) {
+            consumed.missile = false;
+        }
+    });
+
+    window.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 /**
- * Consume a single-press action key (returns true once, then resets).
- * Use this for actions that should only fire once per press.
+ * Check and consume a single-press action.
+ * Returns true once per keypress, then false until the key is released and pressed again.
+ * 
+ * @param {'flare' | 'emp' | 'missile' | 'restart' | 'pause' | 'start'} action
+ * @returns {boolean}
  */
 export function consumeAction(action) {
     if (keys[action]) {
@@ -117,20 +157,6 @@ export function consumeAction(action) {
         return true;
     }
     return false;
-}
-
-/**
- * Force an action key into the "already consumed" state without firing it.
- * Space is shared by 'start' and 'flare' (title-screen start vs. in-game
- * flare drop) — if the player is still holding Space when 'start' fires,
- * the still-armed 'flare' key would otherwise auto-consume on the first
- * gameplay frame (and OS key-repeat would keep re-arming it while held).
- * Call this on the sibling action right after consuming 'start' so a held
- * key requires a fresh press before it can trigger anything else.
- */
-export function suppressAction(action) {
-    keys[action] = false;
-    consumed[action] = true;
 }
 
 export default keys;

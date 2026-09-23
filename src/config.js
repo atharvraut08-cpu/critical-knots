@@ -8,6 +8,7 @@
 export const CONFIG = {
     // ── Player & Flight Aerodynamics ───────────────────
     playerBaseSpeed: 220,       // px/s cruise speed
+    playerMaxSpeed: 352,        // px/s max boost speed
     playerTurnRate: 2.2,        // rad/s
     playerRadius: 14,           // collision radius
     boostMultiplier: 1.6,       // speed × this while boosting (352 px/s)

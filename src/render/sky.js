@@ -1,28 +1,47 @@
 /**
- * sky.js — Day/night sky color lerp + sun/moon
- *
- * CG Concept: Linear Interpolation (lerp)
- * The sky color smoothly transitions from day → dusk → night
- * over CONFIG.skyLerpDuration seconds. This serves as both a
- * visual signal of survival time and a demonstration of lerp
- * applied to RGB color channels. A vertical gradient (zenith →
- * horizon) adds depth, and a sun/moon disc arcs across the sky
- * and crossfades to reinforce the same time-of-day parameter.
+ * sky.js — Cinema-Grade Atmosphere, God Rays, Volumetric Clouds, and Cinematic Vignette
+ * 
+ * Features:
+ * - Dynamic Day/Dusk/Night color transitions with lerp
+ * - Solar Crepuscular God Rays arcing across the stratosphere
+ * - Volumetric procedural drifting cumulus clouds with soft radial falloff
+ * - Tactical altitude combat grid for spatial awareness & depth
+ * - Cinematic Screen Vignette & Supersonic Boost Streaks
  */
 
-import { CONFIG } from '../config.js';
-import { lerp } from '../utils/vector.js';
-import { clamp } from '../utils/math.js';
+import { CONFIG } from '../config.js?v=2.3';
+import { lerp } from '../utils/vector.js?v=2.3';
+import { clamp } from '../utils/math.js?v=2.3';
+import camera from '../camera.js?v=2.3';
 
-/**
- * Compute the current sky zenith color based on survival time.
- * CG Concept: Linear interpolation — blending between three
- * color stops (day → dusk → night) using the player's survival
- * time as the interpolation parameter.
- *
- * @param {number} timeAlive - seconds survived
- * @returns {[number, number, number]} RGB triple
- */
+// Procedural cloud cluster seeds
+const CLOUDS = [];
+for (let i = 0; i < 32; i++) {
+    CLOUDS.push({
+        x: (Math.random() - 0.5) * 7000,
+        y: (Math.random() - 0.5) * 7000,
+        radius: 80 + Math.random() * 120,
+        puffs: Array.from({ length: 6 }, () => ({
+            ox: (Math.random() - 0.5) * 80,
+            oy: (Math.random() - 0.5) * 50,
+            r: 50 + Math.random() * 50,
+        })),
+        alpha: 0.14 + Math.random() * 0.16,
+        speed: 10 + Math.random() * 16,
+    });
+}
+
+// Speed streak lines for supersonic boost
+const STREAKS = [];
+for (let i = 0; i < 48; i++) {
+    STREAKS.push({
+        x: Math.random() * 1280,
+        y: Math.random() * 720,
+        len: 90 + Math.random() * 160,
+        alpha: Math.random() * 0.45,
+    });
+}
+
 function getSkyRGB(timeAlive) {
     const t = clamp(timeAlive / CONFIG.skyLerpDuration, 0, 1);
     const day = CONFIG.skyColorDay;
@@ -30,16 +49,14 @@ function getSkyRGB(timeAlive) {
     const night = CONFIG.skyColorNight;
 
     if (t < 0.5) {
-        // Day → Dusk (first half of cycle)
-        const t2 = t * 2; // normalize to [0, 1]
+        const t2 = t * 2;
         return [
             lerp(day[0], dusk[0], t2),
             lerp(day[1], dusk[1], t2),
             lerp(day[2], dusk[2], t2),
         ];
     }
-    // Dusk → Night (second half of cycle)
-    const t2 = (t - 0.5) * 2; // normalize to [0, 1]
+    const t2 = (t - 0.5) * 2;
     return [
         lerp(dusk[0], night[0], t2),
         lerp(dusk[1], night[1], t2),
@@ -47,33 +64,18 @@ function getSkyRGB(timeAlive) {
     ];
 }
 
-/**
- * Compute the current sky color based on survival time.
- * @param {number} timeAlive - seconds survived
- * @returns {string} CSS color string
- */
 export function getSkyColor(timeAlive) {
     const [r, g, b] = getSkyRGB(timeAlive);
     return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
 }
 
 /**
- * Draw the sun (day) or moon (night), crossfading and arcing across
- * the sky as a function of survival time — the same lerp parameter
- * driving the sky color, applied to position and opacity.
- * CG Concept: Linear interpolation applied to position + alpha.
- *
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} canvasW
- * @param {number} canvasH
- * @param {number} timeAlive
+ * Draw sun/moon celestial disc and solar crepuscular god rays.
  */
 function drawCelestialBody(ctx, canvasW, canvasH, timeAlive) {
     const t = clamp(timeAlive / CONFIG.skyLerpDuration, 0, 1);
 
-    // Sun: bright early, fades out by the dusk/night transition.
     const sunAlpha = clamp(1 - t / 0.6, 0, 1);
-    // Moon: rises starting mid-cycle, fully visible by night.
     const moonProgress = clamp((t - 0.35) / 0.65, 0, 1);
     const moonAlpha = clamp((t - 0.35) / 0.3, 0, 1);
 
@@ -82,15 +84,38 @@ function drawCelestialBody(ctx, canvasW, canvasH, timeAlive) {
 
     const drawBody = (progress, alpha, isSun) => {
         if (alpha <= 0.01) return;
-        // Sun descends toward the horizon as it sets; moon rises away from it.
         const heightT = isSun ? progress : 1 - progress;
         const x = lerp(canvasW * 0.18, canvasW * 0.82, progress);
         const y = lerp(arcTop, arcBottom, heightT);
         const glowColor = isSun ? '255,230,180' : '190,205,235';
-        const coreColor = isSun ? '#fff6e0' : '#e8edf7';
 
         ctx.save();
-        // Outer glow
+
+        // ── Crepuscular God Rays (Sun Only) ─────────────────
+        if (isSun && alpha > 0.15) {
+            ctx.globalCompositeOperation = 'lighter';
+            const rayCount = 8;
+            for (let r = 0; r < rayCount; r++) {
+                const angle = 0.5 + (r / rayCount) * 2.2 + Math.sin(Date.now() / 4000 + r) * 0.08;
+                const length = 550;
+                const rayWidth = 0.14;
+
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(x + Math.cos(angle - rayWidth) * length, y + Math.sin(angle - rayWidth) * length);
+                ctx.lineTo(x + Math.cos(angle + rayWidth) * length, y + Math.sin(angle + rayWidth) * length);
+                ctx.closePath();
+
+                const rayGrad = ctx.createRadialGradient(x, y, 20, x, y, length);
+                rayGrad.addColorStop(0, `rgba(255, 240, 200, ${alpha * 0.15})`);
+                rayGrad.addColorStop(1, 'rgba(255, 240, 200, 0)');
+                ctx.fillStyle = rayGrad;
+                ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        // Celestial outer glow halo
         const grad = ctx.createRadialGradient(x, y, 0, x, y, CONFIG.celestialGlowRadius);
         grad.addColorStop(0, `rgba(${glowColor},${alpha * 0.35})`);
         grad.addColorStop(1, `rgba(${glowColor},0)`);
@@ -99,57 +124,148 @@ function drawCelestialBody(ctx, canvasW, canvasH, timeAlive) {
         ctx.arc(x, y, CONFIG.celestialGlowRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Core disc
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = coreColor;
+        // Celestial core disc
+        ctx.fillStyle = isSun ? `rgba(255,246,224,${alpha})` : `rgba(232,237,247,${alpha})`;
         ctx.beginPath();
         ctx.arc(x, y, CONFIG.celestialRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Moon craters for a bit of surface detail
-        if (!isSun) {
-            ctx.fillStyle = 'rgba(150,160,190,0.5)';
-            ctx.beginPath();
-            ctx.arc(x - CONFIG.celestialRadius * 0.3, y - CONFIG.celestialRadius * 0.2, CONFIG.celestialRadius * 0.22, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(x + CONFIG.celestialRadius * 0.25, y + CONFIG.celestialRadius * 0.3, CONFIG.celestialRadius * 0.15, 0, Math.PI * 2);
-            ctx.fill();
-        }
         ctx.restore();
     };
 
-    drawBody(t, sunAlpha, true);
+    drawBody(t / 0.65, sunAlpha, true);
     drawBody(moonProgress, moonAlpha, false);
 }
 
 /**
- * Draw the sky background — a vertical gradient from zenith to a
- * lightened horizon band, plus the sun/moon. Called before any
- * entity rendering so it acts as the base layer.
- * CG Concept: Linear interpolation — the horizon color is the
- * zenith color lerped toward white, and the gradient itself
- * interpolates between the two across the canvas height.
- *
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} canvasW
- * @param {number} canvasH
- * @param {number} timeAlive
+ * Draw tactical aerial grid across world coordinates.
  */
-export function drawSky(ctx, canvasW, canvasH, timeAlive) {
+function drawAltitudeGrid(ctx, canvasW, canvasH) {
+    const gridSize = 400;
+    const offsetX = (-camera.x * camera.zoom) % gridSize;
+    const offsetY = (-camera.y * camera.zoom) % gridSize;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+    ctx.lineWidth = 1;
+
+    for (let x = offsetX - gridSize; x < canvasW + gridSize; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvasH);
+        ctx.stroke();
+    }
+
+    for (let y = offsetY - gridSize; y < canvasH + gridSize; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasW, y);
+        ctx.stroke();
+    }
+
+    // Altitude crosshair ticks
+    ctx.fillStyle = 'rgba(96, 213, 255, 0.09)';
+    for (let x = offsetX; x < canvasW; x += gridSize) {
+        for (let y = offsetY; y < canvasH; y += gridSize) {
+            ctx.fillRect(x - 4, y - 1, 8, 2);
+            ctx.fillRect(x - 1, y - 4, 2, 8);
+        }
+    }
+    ctx.restore();
+}
+
+/**
+ * Draw procedurally drifting cumulus clouds with soft radial falloff and depth.
+ */
+function drawDriftingClouds(ctx, canvasW, canvasH, dt = 0.016) {
+    ctx.save();
+    for (const c of CLOUDS) {
+        c.x += c.speed * dt;
+        if (c.x > 3800) c.x = -3800;
+
+        const screenX = (c.x - camera.x * 0.38) * camera.zoom + canvasW / 2;
+        const screenY = (c.y - camera.y * 0.38) * camera.zoom + canvasH / 2;
+
+        if (screenX < -220 || screenX > canvasW + 220 || screenY < -220 || screenY > canvasH + 220) {
+            continue;
+        }
+
+        ctx.fillStyle = `rgba(255, 255, 255, ${c.alpha})`;
+        for (const p of c.puffs) {
+            ctx.beginPath();
+            ctx.arc(screenX + p.ox * camera.zoom, screenY + p.oy * camera.zoom, p.r * camera.zoom, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
+
+/**
+ * Draw supersonic boost streaks.
+ */
+function drawSpeedStreaks(ctx, canvasW, canvasH, heading) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1.8;
+
+    const dx = Math.cos(heading);
+    const dy = Math.sin(heading);
+
+    for (const s of STREAKS) {
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x - dx * s.len, s.y - dy * s.len);
+        ctx.stroke();
+
+        s.x -= dx * 20;
+        s.y -= dy * 20;
+
+        if (s.x < 0) s.x += canvasW;
+        if (s.x > canvasW) s.x -= canvasW;
+        if (s.y < 0) s.y += canvasH;
+        if (s.y > canvasH) s.y -= canvasH;
+    }
+    ctx.restore();
+}
+
+/**
+ * Draw subtle cinematic screen vignette.
+ */
+export function drawVignette(ctx, canvasW, canvasH) {
+    ctx.save();
+    const rx = canvasW / 2;
+    const ry = canvasH / 2;
+    const grad = ctx.createRadialGradient(rx, ry, rx * 0.6, rx, ry, rx * 1.1);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    grad.addColorStop(0.75, 'rgba(10, 15, 30, 0.25)');
+    grad.addColorStop(1, 'rgba(5, 8, 20, 0.55)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.restore();
+}
+
+export function drawSky(ctx, canvasW, canvasH, timeAlive, isBoosting = false, heading = 0) {
     const [r, g, b] = getSkyRGB(timeAlive);
-    const lighten = CONFIG.skyHorizonLighten;
-    const horizon = [
-        lerp(r, 255, lighten / 255),
-        lerp(g, 255, lighten / 255),
-        lerp(b, 255, lighten / 255),
+    const hL = CONFIG.skyHorizonLighten;
+    const [hr, hg, hb] = [
+        Math.min(255, r + hL),
+        Math.min(255, g + hL),
+        Math.min(255, b + hL),
     ];
 
     const grad = ctx.createLinearGradient(0, 0, 0, canvasH);
     grad.addColorStop(0, `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`);
-    grad.addColorStop(1, `rgb(${Math.round(horizon[0])},${Math.round(horizon[1])},${Math.round(horizon[2])})`);
+    grad.addColorStop(0.72, `rgb(${Math.round(hr)},${Math.round(hg)},${Math.round(hb)})`);
+    grad.addColorStop(1, `rgb(${Math.round(hr * 0.92)},${Math.round(hg * 0.92)},${Math.round(hb * 0.92)})`);
+
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvasW, canvasH);
 
     drawCelestialBody(ctx, canvasW, canvasH, timeAlive);
+    drawAltitudeGrid(ctx, canvasW, canvasH);
+    drawDriftingClouds(ctx, canvasW, canvasH);
+
+    if (isBoosting) {
+        drawSpeedStreaks(ctx, canvasW, canvasH, heading);
+    }
 }

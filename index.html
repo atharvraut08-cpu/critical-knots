@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skyfall Evasion — 2D Missile Survival Game</title>
-    <meta name="description" content="Skyfall Evasion: A 2D top-down missile-survival arcade game built with HTML5 Canvas and vanilla JavaScript. Dodge heat-seeking missiles, deploy flares and EMPs, and survive as long as you can.">
+    <title>Skyfall Evasion — 12-Player Squadron Dogfight</title>
+    <meta name="description" content="Skyfall Evasion: 12-Player Tactical Squadron Dogfight Arcade Game. 4 Teams × 3 Jets, Private Rooms, Wing Missiles, Health Kits (+50 HP), and Kinetic Boosts.">
     <style>
         * {
             margin: 0;
@@ -19,58 +19,408 @@
             align-items: center;
             min-height: 100vh;
             overflow: hidden;
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: #f8fafc;
         }
 
         #gameCanvas {
             display: block;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
-            cursor: none;
         }
 
-        #mobileWarning {
-            display: none;
+        /* ── Modern Glassmorphic Lobby Styles ──────────────── */
+        #lobbyOverlay {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            background: #0a0a1e;
-            color: #aabbcc;
-            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, rgba(15, 23, 42, 0.94) 0%, rgba(10, 10, 30, 0.98) 100%);
+            z-index: 1000;
+            display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 100;
-            text-align: center;
+            padding: 20px;
+        }
+
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .main-menu-card {
+            width: 500px;
+            max-width: 95vw;
             padding: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
 
-        #mobileWarning h2 {
+        .lobby-badge {
+            align-self: center;
+            background: rgba(96, 213, 255, 0.15);
             color: #60d5ff;
-            font-size: 24px;
-            margin-bottom: 16px;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 2px;
+            padding: 4px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(96, 213, 255, 0.3);
         }
 
-        #mobileWarning p {
+        .lobby-title {
+            font-size: 38px;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            background: linear-gradient(135deg, #ffffff 30%, #60d5ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0;
+        }
+
+        .lobby-subtitle {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-top: -6px;
+            margin-bottom: 8px;
+        }
+
+        .input-group {
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .input-group label {
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+
+        input[type="text"] {
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: #60d5ff;
+            box-shadow: 0 0 0 3px rgba(96, 213, 255, 0.2);
+        }
+
+        .btn {
+            border: none;
+            border-radius: 8px;
+            padding: 14px 20px;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #007aff 0%, #0056b3 100%);
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(0, 122, 255, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 122, 255, 0.6);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            color: #f8fafc;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-tertiary {
+            background: transparent;
+            color: #64748b;
+            font-size: 12px;
+            padding: 10px;
+        }
+
+        .btn-tertiary:hover {
+            color: #94a3b8;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #64748b;
+            font-size: 11px;
+            letter-spacing: 1.5px;
+            font-weight: 700;
+            margin: 6px 0;
+        }
+
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .divider span {
+            padding: 0 10px;
+        }
+
+        .join-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .join-row input {
+            flex: 1;
+            text-align: center;
+            font-family: monospace;
             font-size: 16px;
-            line-height: 1.6;
-            max-width: 400px;
+            letter-spacing: 2px;
+        }
+
+        /* ── Room Lobby Layout ────────────────────────────── */
+        .room-lobby-card {
+            width: 1080px;
+            max-width: 95vw;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .room-topbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 16px;
+        }
+
+        .room-code-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .room-code-badge strong {
+            color: #60d5ff;
+            font-family: monospace;
+            font-size: 20px;
+            background: rgba(96, 213, 255, 0.12);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px dashed rgba(96, 213, 255, 0.4);
+        }
+
+        .teams-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        @media (max-width: 860px) {
+            .teams-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .team-card {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .team-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .team-name-input {
+            background: transparent;
+            border: none;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 14px;
+            padding: 4px 6px;
+            width: 100%;
+            border-radius: 4px;
+        }
+
+        .team-name-input:hover, .team-name-input:focus {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .team-count {
+            font-weight: 800;
+            font-size: 13px;
+        }
+
+        .slots-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .player-slot {
+            height: 48px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .player-slot.filled {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .player-slot.filled.is-me {
+            border-color: #60d5ff;
+            background: rgba(96, 213, 255, 0.12);
+        }
+
+        .player-slot.empty {
+            border: 1px dashed rgba(255, 255, 255, 0.2);
+            justify-content: center;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .player-slot.empty:hover {
+            border-color: #60d5ff;
+            color: #60d5ff;
+            background: rgba(96, 213, 255, 0.08);
+        }
+
+        .slot-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .slot-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .you-tag {
+            font-size: 10px;
+            background: #60d5ff;
+            color: #0f172a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 800;
+        }
+
+        .room-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .host-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .bot-checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+
+        .btn-launch {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+            padding: 14px 28px;
+            font-size: 15px;
+        }
+
+        .btn-launch:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
 
-    <!-- Risk #4 mitigation: mobile/tablet warning -->
-    <div id="mobileWarning">
-        <h2>🖥️ Desktop + Keyboard Required</h2>
-        <p>
-            Skyfall Evasion requires a desktop browser with a physical keyboard to play.
-            Please visit this page on a desktop computer.
-        </p>
+    <!-- Glassmorphic Multiplayer Room Lobby Overlay -->
+    <div id="lobbyOverlay">
+        <div class="lobby-card glass-panel main-menu-card">
+            <div class="lobby-badge">MULTI-TEAM DOGFIGHT</div>
+            <h1 class="lobby-title">SKYFALL EVASION</h1>
+            <p class="lobby-subtitle">12-Player Tactical Squadron Combat (4 Teams × 3 Jets)</p>
+
+            <div class="input-group">
+                <label>CALLSIGN (PILOT NAME)</label>
+                <input type="text" id="pilotNameInput" value="Viper_Ace" maxlength="16" placeholder="Enter Call Sign..." />
+            </div>
+
+            <div class="btn-row">
+                <button id="btnHostRoom" class="btn btn-primary">
+                    <span class="btn-icon">⚡</span> HOST PRIVATE ROOM
+                </button>
+            </div>
+
+            <div class="divider"><span>OR JOIN SQUADRON</span></div>
+
+            <div class="join-row">
+                <input type="text" id="roomCodeInput" maxlength="6" placeholder="ROOM CODE" style="text-transform: uppercase;" />
+                <button id="btnJoinRoom" class="btn btn-secondary">JOIN ROOM</button>
+            </div>
+
+            <div class="divider"><span>SOLO FLIGHT</span></div>
+            <button id="btnSinglePlayer" class="btn btn-tertiary">PRACTICE / SINGLE PLAYER</button>
+        </div>
     </div>
 
-    <script type="module" src="src/main.js"></script>
+    <script type="module" src="src/main.js?v=2.5.0"></script>
 </body>
 </html>

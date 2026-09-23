@@ -78,8 +78,6 @@ export function drawParallax(ctx, camera, canvasW, canvasH) {
                     const bound = elem.size * 2;
                     if (sx < -bound || sx > canvasW + bound || sy < -bound || sy > canvasH + bound) continue;
 
-                    // Twinkling stars with clean alpha isolation
-                    ctx.save();
                     ctx.globalAlpha = layer.twinkle
                         ? 0.4 + 0.6 * Math.sin(now * CONFIG.starTwinkleSpeed + elem.phase)
                         : 1;
@@ -87,7 +85,6 @@ export function drawParallax(ctx, camera, canvasW, canvasH) {
                     ctx.beginPath();
                     ctx.arc(sx, sy, elem.size, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.restore();
                 }
             }
         }

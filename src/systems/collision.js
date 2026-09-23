@@ -4,12 +4,14 @@
  * CG Concepts:
  * - Euclidean distance & circle-circle / circle-AABB intersection tests
  * - Multi-stage parametric particle explosion emitters
+ * - Multiplayer damage arbitration & friendly fire checks
  */
 
 import { distance } from '../utils/vector.js';
 import { CONFIG } from '../config.js';
 import { applyShake } from '../camera.js';
 import { emit } from '../entities/particle.js';
+import { playExplosion } from './audio.js?v=2.4.0';
 
 /**
  * Circle-circle collision test.
@@ -43,7 +45,7 @@ export function circleAABB(circle, rect) {
 }
 
 /**
- * Run all collision checks for the current frame.
+ * Run all collision checks for the single-player game modes.
  * 
  * @param {object} state
  */
@@ -157,7 +159,6 @@ export function checkAllCollisions(state) {
             const f = flares[k];
             if (!f.alive) continue;
 
-            // Direct flare intercept
             if (distance(m, f) < m.radius + 12) {
                 m.alive = false;
                 f.alive = false;
@@ -168,14 +169,13 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 7. Bullet ↔ Missile & Obstacle (Asteroid) Impact ──
+    // ── 7. Bullet ↔ Missile & Obstacle Impact ───────────
     const bullets = state.bullets;
     if (bullets && bullets.length > 0) {
         for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
             const b = bullets[bIdx];
             if (!b.alive) continue;
 
-            // Check bullet against Missiles
             for (let mIdx = 0; mIdx < missiles.length; mIdx++) {
                 const m = missiles[mIdx];
                 if (!m.alive) continue;
@@ -191,7 +191,6 @@ export function checkAllCollisions(state) {
 
             if (!b.alive) continue;
 
-            // Check bullet against Obstacles / Asteroids
             for (let oIdx = 0; oIdx < obstacles.length; oIdx++) {
                 const obs = obstacles[oIdx];
                 if (!obs.alive) continue;
@@ -203,7 +202,6 @@ export function checkAllCollisions(state) {
                 if (hit) {
                     b.alive = false;
                     obs.alive = false;
-                    // Fragmentation debris & smoke on obstacle destruction
                     emit(b.x, b.y, 16, 'spark', '255,200,100', {
                         speedMin: 50,
                         speedMax: 150,
@@ -228,18 +226,108 @@ export function checkAllCollisions(state) {
 }
 
 /**
+ * Run collision checks for Multiplayer Mode:
+ * - Bullets vs Enemy Jets (friendly-fire disabled)
+ * - Wing Missiles vs Enemy Jets & Flares
+ * - Jets vs Health Kits (+50 HP) & Boost Crates
+ * 
+ * @param {object} state
+ * @param {object} net - NetworkClient instance
+ */
+export function checkMultiplayerCollisions(state, net) {
+    const player = state.player;
+    if (!player) return;
+
+    const allTargets = [player, ...(state.remotePlayers || [])];
+
+    // ── 1. Bullets vs Aircraft ──────────────────────────
+    const bullets = state.bullets;
+    if (bullets && bullets.length > 0) {
+        for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
+            const b = bullets[bIdx];
+            if (!b.alive) continue;
+
+            for (const target of allTargets) {
+                if (!target.alive) continue;
+                // Friendly fire immunity
+                if (target.team === b.ownerTeam) continue;
+
+                if (circleCircle(b, target)) {
+                    b.alive = false;
+                    // Spark impact
+                    emit(b.x, b.y, 8, 'spark', '255,230,100', {
+                        speedMin: 40,
+                        speedMax: 100,
+                        sizeMin: 1.5,
+                        sizeMax: 3.0,
+                    });
+
+                    // If local player fired this bullet, report hit to server
+                    if (b.ownerId === player.id) {
+                        net.reportHit(target.id, 6, '20mm Cannon');
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // ── 2. Combat Missiles vs Aircraft ──────────────────
+    const combatMissiles = state.combatMissiles || [];
+    for (const m of combatMissiles) {
+        if (!m.alive) continue;
+
+        for (const target of allTargets) {
+            if (!target.alive) continue;
+            if (target.team === m.ownerTeam) continue;
+
+            if (circleCircle(m, target)) {
+                m.alive = false;
+                spawnExplosion(m.x, m.y, false, true);
+
+                if (m.ownerId === player.id) {
+                    net.reportHit(target.id, 50, 'Sidewinder Missile');
+                }
+                break;
+            }
+        }
+    }
+
+    // ── 3. Local Player ↔ Health Kits & Boosts ──────────
+    if (player.alive && state.pickups) {
+        for (const pk of state.pickups) {
+            if (!pk.alive) continue;
+
+            if (circleCircle(player, pk)) {
+                pk.alive = false;
+                // Health nanotech green sparkles or shield blue sparks
+                const sparkColor = pk.type === 'health' ? '52,199,89'
+                    : pk.type === 'shield' ? '0,122,255'
+                    : pk.type === 'missile' ? '255,149,0'
+                    : '175,82,222';
+
+                emit(pk.x, pk.y, 20, 'spark', sparkColor, {
+                    speedMin: 50,
+                    speedMax: 140,
+                    sizeMin: 2,
+                    sizeMax: 4,
+                });
+
+                net.collectPickup(pk.id);
+            }
+        }
+    }
+}
+
+/**
  * Multi-stage realistic explosion:
  * 1. Expanding shockwave ring
  * 2. High-heat fireball
  * 3. High-velocity burning sparks/shrapnel
  * 4. Lingering billowing smoke cloud
- * 
- * @param {number} x
- * @param {number} y
- * @param {boolean} isPlayer
- * @param {boolean} isHeavy
  */
 export function spawnExplosion(x, y, isPlayer = false, isHeavy = false) {
+    playExplosion(isPlayer || isHeavy);
     const mult = isPlayer ? 2.2 : (isHeavy ? 1.6 : 1.0);
     const count = Math.round(CONFIG.explosionParticleCount * mult);
 

@@ -1,0 +1,17 @@
+{
+  "name": "skyfall-evasion",
+  "version": "1.0.0",
+  "description": "Skyfall Evasion — 2D Missile Survival & 4-Team Multiplayer Dogfight Arcade Game",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

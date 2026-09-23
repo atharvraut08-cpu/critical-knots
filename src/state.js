@@ -8,13 +8,11 @@
 
 import { CONFIG } from './config.js';
 
-/** @type {'title' | 'playing' | 'gameover'} */
-let phase = 'title';
-
 // ── Core state object ───────────────────────────────────
 const state = {
-    phase: 'title',
+    phase: 'title',         // 'title' | 'lobby' | 'playing' | 'gameover'
     paused: false,
+    gameMode: 'survival',   // 'survival' | 'freeflight' | 'multiplayer'
     timeAlive: 0,           // seconds survived
 
     // Entity arrays — filtered each frame by alive flag
@@ -23,7 +21,14 @@ const state = {
     pickups: [],
     flares: [],             // active flare decoys in the world
     empWaves: [],           // active expanding electromagnetic pulse shockwaves
-    bullets: [],            // active player machine gun projectiles
+    bullets: [],            // active machine gun projectiles
+
+    // Multiplayer Entities & Session
+    remotePlayers: [],      // remote jets in the match (11 other jets)
+    combatMissiles: [],     // player-fired wing homing missiles
+    killFeed: [],           // recent combat frags
+    teamScores: [0, 0, 0, 0],
+    roomData: null,
 
     // Player reference (set by main.js on game start)
     player: null,
@@ -35,7 +40,7 @@ const state = {
     empRegenTimer: 0,
 
     // HUD effect timers
-    hudGlitchTimer: 0,      // digital static distortion countdown
+    hudGlitchTimer: 0,
 
     // Stats for score screen
     stats: {
@@ -45,14 +50,12 @@ const state = {
         fuelCollected: 0,
     },
 
-    // Camera shake state (managed by camera.js, stored here for reset)
+    // Camera shake state
     shakeMagnitude: 0,
 };
 
 /**
  * Reset ALL game state for a clean restart.
- * This must zero/reinitialize every array and stat.
- * If you add new state anywhere, add its reset here too.
  */
 export function reset() {
     state.phase = 'playing';
@@ -65,6 +68,7 @@ export function reset() {
     state.flares.length = 0;
     state.empWaves.length = 0;
     state.bullets.length = 0;
+    state.combatMissiles.length = 0;
 
     state.player = null;
 

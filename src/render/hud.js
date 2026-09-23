@@ -1,32 +1,33 @@
 /**
- * hud.js — HUD, title screen, game-over screen, score display
+ * hud.js — HUD, title screen, game-over screen, and 4-Team Tactical Combat HUD
  * 
- * Renders all UI overlays: in-game HUD (timer, fuel, charges),
- * title screen with controls reference, and game-over score screen.
+ * Renders all UI overlays:
+ * - Single-player survival & free-flight HUD
+ * - 4-Team Multiplayer Combat HUD (scores, radar, lock-on reticle, ordnance)
+ * - Health & Shield status displays
+ * - Wing-mounted missile readiness
+ * - Live Kill Feed
+ * - Tab Tactical Scoreboard
  */
 
-import { CONFIG } from '../config.js';
-import { getActiveCount } from '../entities/particle.js';
-import { clamp } from '../utils/math.js';
+import { CONFIG } from '../config.js?v=2.3';
+import { clamp } from '../utils/math.js?v=2.3';
+import { worldToScreen } from '../camera.js?v=2.3';
 
-/**
- * Draw the title screen.
- * Shows game title and control reference (PRD Section 3.1 requirement).
- * 
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w - canvas width
- * @param {number} h - canvas height
- */
+export const TEAM_COLORS = [
+    { name: 'Crimson', main: '#ff3b30', dark: '#801814', glow: 'rgba(255, 59, 48, 0.4)' },
+    { name: 'Cobalt',  main: '#007aff', dark: '#0d4077', glow: 'rgba(0, 122, 255, 0.4)' },
+    { name: 'Emerald', main: '#34c759', dark: '#146328', glow: 'rgba(52, 199, 89, 0.4)' },
+    { name: 'Solar',   main: '#ff9500', dark: '#8a4e00', glow: 'rgba(255, 149, 0, 0.4)' },
+];
+
 export function drawTitleScreen(ctx, w, h, state) {
-    // Darkened overlay
     ctx.fillStyle = 'rgba(10, 10, 30, 0.85)';
     ctx.fillRect(0, 0, w, h);
 
-    // Title
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Glow effect
     ctx.shadowColor = '#60d5ff';
     ctx.shadowBlur = 30;
     ctx.fillStyle = '#60d5ff';
@@ -34,29 +35,26 @@ export function drawTitleScreen(ctx, w, h, state) {
     ctx.fillText('SKYFALL EVASION', w / 2, h * 0.19);
     ctx.shadowBlur = 0;
 
-    // Subtitle
     ctx.fillStyle = '#aaccee';
     ctx.font = '17px "Segoe UI", Arial, sans-serif';
     ctx.fillText('A 2D Missile Survival Arcade Game', w / 2, h * 0.255);
 
-    // ── Start Game Prompt ───────────────────────────────
     const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
     ctx.fillStyle = `rgba(96, 213, 255, ${pulse})`;
     ctx.font = 'bold 22px "Segoe UI", Arial, sans-serif';
     ctx.fillText('[ Press SPACE to Start Game ]', w / 2, h * 0.36);
 
-    // ── Controls Reference ──────────────────────────────
     ctx.fillStyle = '#8899aa';
     ctx.font = '13px monospace';
     const controls = [
         ['← / A', 'Bank Left (Induces Drag)'],
         ['→ / D', 'Bank Right (Induces Drag)'],
         ['SHIFT (hold)', 'Speed Boost / Afterburner'],
-        ['C', 'Fire Machine Gun'],
-        ['Q', 'Deploy Flare Salvo'],
-        ['E', 'Trigger EMP Wave'],
-        ['P', 'Pause Game'],
-        ['SPACE', 'Start Game / Restart'],
+        ['C / L-CLICK', 'Fire 20mm Machine Gun'],
+        ['F / R-CLICK', 'Fire Wing-Mounted Missile'],
+        ['Q', 'Deploy Flare Decoys'],
+        ['E', 'Trigger EMP Shockwave'],
+        ['TAB (hold)', 'Squadron Tactical Scoreboard'],
     ];
 
     const startY = h * 0.46;
@@ -72,7 +70,6 @@ export function drawTitleScreen(ctx, w, h, state) {
         ctx.fillText(controls[i][1], w / 2 + 20, startY + i * lineH);
     }
 
-    // Academic credit
     ctx.textAlign = 'center';
     ctx.fillStyle = '#556677';
     ctx.font = '12px "Segoe UI", Arial, sans-serif';
@@ -80,626 +77,618 @@ export function drawTitleScreen(ctx, w, h, state) {
 }
 
 /**
- * Draw the in-game HUD (survival timer, fuel bar, charges, debug info).
- * 
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w
- * @param {number} h
- * @param {object} state
+ * Draw in-game HUD for Single-Player survival mode.
  */
 export function drawHUD(ctx, w, h, state) {
     const player = state.player;
     if (!player) return;
 
     const margin = 20;
-    const barW = 180;
-    const barH = 12;
 
-    // ── Survival Timer (top center) ─────────────────────
+    // Timer
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
+    ctx.fillStyle = '#60d5ff';
+    ctx.font = 'bold 28px monospace';
+    const mins = Math.floor(state.timeAlive / 60);
+    const secs = Math.floor(state.timeAlive % 60);
+    const ms = Math.floor((state.timeAlive % 1) * 100);
+    const timerStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
+    ctx.fillText(timerStr, w / 2, margin);
+
+    // Fuel Bar
+    const barW = 180;
+    const barH = 12;
+    const barX = margin;
+    const barY = margin + 20;
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillRect(barX, barY, barW, barH);
+    const fuelFrac = player.fuel / player.maxFuel;
+    ctx.fillStyle = fuelFrac > 0.4 ? '#34c759' : fuelFrac > 0.2 ? '#ff9500' : '#ff3b30';
+    ctx.fillRect(barX, barY, barW * fuelFrac, barH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.strokeRect(barX, barY, barW, barH);
+
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px monospace';
-    ctx.fillText(formatTime(state.timeAlive), w / 2, margin);
-
-    // ── Fuel Bar (top-left) ─────────────────────────────
-    const fuelX = margin;
-    const fuelY = margin;
-
-    // Label
+    ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#aabbcc';
-    ctx.font = '12px monospace';
-    ctx.fillText('FUEL', fuelX, fuelY);
+    ctx.fillText(`FUEL: ${Math.round(player.fuel)}%`, barX, barY - 14);
 
-    // Background (rounded track)
-    ctx.beginPath();
-    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.fill();
+    // Charges (Flares & EMP)
+    const chargeY = barY + barH + 16;
+    ctx.fillText(`FLARES [Q]: ${player.flares}/${CONFIG.maxFlares}`, margin, chargeY);
+    ctx.fillText(`EMP [E]: ${player.emp}/${CONFIG.maxEmp}`, margin, chargeY + 18);
+    ctx.fillText(`GUN AMMO [C]: ${player.ammoInMag} (MAGS: ${player.magsRemaining})`, margin, chargeY + 36);
 
-    // Fill (always full with healthy green glow)
-    const fuelColor = '#22cc77';
+    // Audio Mute Indicator
     ctx.save();
-    ctx.shadowColor = fuelColor;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
-    ctx.fillStyle = fuelColor;
-    ctx.fill();
-    ctx.restore();
-
-    // Border
-    ctx.beginPath();
-    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // ── Countermeasure Charges (top-left, below fuel) ───
-    const chargeY = fuelY + 40;
-
-    // Flare charges
-    ctx.fillStyle = '#aabbcc';
-    ctx.font = '12px monospace';
-    ctx.fillText('FLARE', fuelX, chargeY);
-    for (let i = 0; i < player.maxFlares; i++) {
-        const charged = i < player.flares;
-        ctx.save();
-        if (charged) {
-            ctx.shadowColor = '#ffdd44';
-            ctx.shadowBlur = 5;
-        }
-        ctx.fillStyle = charged ? '#ffdd44' : 'rgba(255,255,255,0.15)';
-        ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY, 12, 12, 3);
-        ctx.fill();
-        ctx.restore();
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-        ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY, 12, 12, 3);
-        ctx.stroke();
-    }
-
-    // EMP charges
-    ctx.fillStyle = '#aabbcc';
-    ctx.fillText('EMP', fuelX, chargeY + 20);
-    for (let i = 0; i < player.maxEmp; i++) {
-        const charged = i < player.emp;
-        ctx.save();
-        if (charged) {
-            ctx.shadowColor = '#6688ff';
-            ctx.shadowBlur = 5;
-        }
-        ctx.fillStyle = charged ? '#6688ff' : 'rgba(255,255,255,0.15)';
-        ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY + 20, 12, 12, 3);
-        ctx.fill();
-        ctx.restore();
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-        ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY + 20, 12, 12, 3);
-        ctx.stroke();
-    }
-
-    // ── Machine Gun & Magazine Ammo UI (below EMP) ───────
-    const gunY = chargeY + 44;
-    const ammoCount = player.ammoInMag !== undefined ? player.ammoInMag : CONFIG.magCapacity;
-    const magsLeft = player.magsRemaining !== undefined ? player.magsRemaining : (CONFIG.maxMags - 1);
-    const isReloading = !!player.reloading;
-
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#aabbcc';
-    ctx.font = '12px monospace';
-    ctx.fillText('GUN AMMO', fuelX, gunY);
-
-    if (isReloading) {
-        // Reload in progress banner & animated countdown bar
-        const reloadProg = Math.max(0, Math.min(1, (CONFIG.reloadDuration - player.reloadTimer) / CONFIG.reloadDuration));
-        const timeLeft = Math.max(0, player.reloadTimer).toFixed(1);
-
-        const blink = Math.sin(Date.now() / 140) > 0;
-        ctx.fillStyle = blink ? '#ffcc00' : '#ff6622';
-        ctx.font = 'bold 12px monospace';
-        ctx.fillText(`⚡ RELOADING: ${timeLeft}s`, fuelX + 75, gunY);
-
-        // Reload track
-        const rTrackW = barW;
-        const rTrackH = 8;
-        const rTrackY = gunY + 6;
-
-        ctx.beginPath();
-        ctx.roundRect(fuelX, rTrackY, rTrackW, rTrackH, 4);
-        ctx.fillStyle = 'rgba(255, 170, 40, 0.15)';
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.roundRect(fuelX, rTrackY, Math.max(rTrackW * reloadProg, 4), rTrackH, 4);
-        ctx.fillStyle = '#ffaa22';
-        ctx.fill();
-
-        ctx.strokeStyle = 'rgba(255, 180, 50, 0.5)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-    } else {
-        // Numeric ammo in current magazine: e.g. "185 / 200"
-        ctx.textAlign = 'right';
-        ctx.fillStyle = ammoCount > 40 ? '#ffffff' : (ammoCount > 0 ? '#ffaa22' : '#ff4444');
-        ctx.font = 'bold 13px monospace';
-        ctx.fillText(`${ammoCount} / ${CONFIG.magCapacity}`, fuelX + barW, gunY);
-
-        // Magazine ammo bar track
-        const ammoPct = ammoCount / CONFIG.magCapacity;
-        const aTrackW = barW;
-        const aTrackH = 5;
-        const aTrackY = gunY + 5;
-
-        ctx.beginPath();
-        ctx.roundRect(fuelX, aTrackY, aTrackW, aTrackH, 2.5);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.roundRect(fuelX, aTrackY, Math.max(aTrackW * ammoPct, 2), aTrackH, 2.5);
-        ctx.fillStyle = ammoCount > 40 ? '#ffdd44' : '#ff5533';
-        ctx.fill();
-
-        // Reserve Magazines indicator boxes
-        const magY = aTrackY + 13;
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#8899aa';
-        ctx.font = '10px monospace';
-        ctx.fillText(`MAGS: ${magsLeft} / ${CONFIG.maxMags - 1}`, fuelX, magY);
-
-        for (let m = 0; m < CONFIG.maxMags - 1; m++) {
-            const hasMag = m < magsLeft;
-            ctx.fillStyle = hasMag ? '#60d5ff' : 'rgba(255,255,255,0.12)';
-            ctx.fillRect(fuelX + 78 + m * 10, magY - 8, 7, 9);
-        }
-    }
-
-    // ── Entity count debug display (top-right) ──────────
+    ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = '11px monospace';
-    const missiles = state.missiles.length;
-    const particles = getActiveCount();
-    ctx.fillText(`M:${missiles} P:${particles}`, w - margin, margin);
-
-    // ── Boost indicator ─────────────────────────────────
-    if (player.boosting) {
-        ctx.textAlign = 'center';
-        ctx.fillStyle = `rgba(255,180,50,${0.5 + Math.sin(Date.now() / 100) * 0.3})`;
-        ctx.font = 'bold 14px monospace';
-        ctx.fillText('» BOOST «', w / 2, margin + 30);
-    }
-
-    // ── Tactical Cockpit Speedometer (bottom-left) ─────
-    drawSpeedometer(ctx, player, w, h);
-
-    // ── Minimap / Radar (bottom-right) ──────────────────
-    drawMinimap(ctx, w, h, state);
-
-    // ── EMP Avionics Glitch / Static Overlay ────────────
-    if (state.hudGlitchTimer > 0) {
-        drawHUDGlitch(ctx, w, h, state.hudGlitchTimer);
-    }
-
-    // ── Paused overlay ──────────────────────────────────
-    if (state.paused) {
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(0, 0, w, h);
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('PAUSED', w / 2, h / 2);
-        ctx.fillStyle = '#aabbcc';
-        ctx.font = '16px "Segoe UI", Arial, sans-serif';
-        ctx.fillText('Press P to resume', w / 2, h / 2 + 40);
-    }
-}
-
-/**
- * Render brief digital scanlines and electromagnetic glitch static across the HUD on EMP pulse.
- */
-function drawHUDGlitch(ctx, w, h, timer) {
-    const intensity = Math.min(timer / CONFIG.empHudGlitchDuration, 1);
-    ctx.save();
-
-    // 1. Semi-transparent cyan/blue surge vignette
-    ctx.fillStyle = `rgba(80, 200, 255, ${intensity * 0.12})`;
-    ctx.fillRect(0, 0, w, h);
-
-    // 2. Horizontal digital scanline noise slices
-    const bandCount = Math.floor(6 + Math.random() * 8);
-    for (let i = 0; i < bandCount; i++) {
-        const by = Math.random() * h;
-        const bh = 2 + Math.random() * 8;
-        const alpha = Math.random() * 0.18 * intensity;
-        ctx.fillStyle = Math.random() > 0.5 ? `rgba(120, 220, 255, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillRect(0, by, w, bh);
-    }
-
-    // 3. EMP discharge warning banner
-    if (intensity > 0.25) {
-        ctx.font = 'bold 16px monospace';
-        ctx.fillStyle = `rgba(100, 220, 255, ${intensity * 0.85})`;
-        ctx.textAlign = 'center';
-        ctx.fillText('⚡ EMP DISCHARGE // AVIONICS SURGE ⚡', w / 2, h * 0.18);
-    }
-
+    ctx.fillStyle = state.isMuted ? '#ff9500' : '#64748b';
+    ctx.fillText(`[M] AUDIO: ${state.isMuted ? 'MUTED' : 'ON'}`, w - margin, margin + 14);
     ctx.restore();
 }
 
 /**
- * Map absolute world coordinates into localized minimap viewport coordinates.
- * CG Concept: Window-to-Viewport coordinate transformation (affine mapping)
- * 
- * Maps world coordinates from a viewing window centered on the player:
- *   [playerX - worldRange, playerX + worldRange] x [playerY - worldRange, playerY + worldRange]
- * to the screen-space minimap viewport:
- *   [vx, vx + vw] x [vy, vy + vh]
- *
- * @param {number} worldX
- * @param {number} worldY
- * @param {number} playerX
- * @param {number} playerY
- * @param {number} worldRange
- * @param {number} vx
- * @param {number} vy
- * @param {number} vw
- * @param {number} vh
- * @returns {{ x: number, y: number, inBounds: boolean }}
+ * Draw 4-Team Multiplayer Combat HUD:
+ * - 4 Team score cards at the top
+ * - Lock-on seeker reticle over targeted enemy
+ * - Cockpit health, shield, and wing missile ordnance rack
+ * - 360° Team radar / minimap
+ * - Kill feed
+ * - Full tactical scoreboard (when Tab is held)
  */
-export function worldToMinimap(worldX, worldY, playerX, playerY, worldRange, vx, vy, vw, vh) {
-    // CG Concept: Window-to-viewport coordinate transformation
-    const windowMinX = playerX - worldRange;
-    const windowMinY = playerY - worldRange;
-    const windowSpan = worldRange * 2;
-
-    const tx = (worldX - windowMinX) / windowSpan;
-    const ty = (worldY - windowMinY) / windowSpan;
-
-    const inBounds = tx >= 0 && tx <= 1 && ty >= 0 && ty <= 1;
-
-    return {
-        x: vx + tx * vw,
-        y: vy + ty * vh,
-        inBounds,
-    };
-}
-
-/**
- * Draw the tactical radar minimap in the bottom-right corner.
- * CG Concept: Window-to-Viewport transformation + Viewport Clipping
- * 
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w - canvas width
- * @param {number} h - canvas height
- * @param {object} state - global game state
- */
-export function drawMinimap(ctx, w, h, state) {
+export function drawMultiplayerHUD(ctx, w, h, state, input) {
     const player = state.player;
     if (!player) return;
 
-    const mw = CONFIG.minimapWidth;
-    const mh = CONFIG.minimapHeight;
-    const margin = CONFIG.minimapMargin;
-    const range = CONFIG.minimapWorldRange;
+    // ── Victory / Match Ended Screen ────────────────────
+    if (state.matchEnded) {
+        drawVictoryScreen(ctx, w, h, state);
+        return;
+    }
 
-    // Viewport coordinates in bottom-right corner
-    const vx = w - mw - margin;
-    const vy = h - mh - margin;
+    // ── 1. Tactical 4-Team Header Banner ────────────────
+    drawTeamScoreHeader(ctx, w, state);
+
+    // ── 2. Target Lock-On Seeker Reticle ────────────────
+    drawTargetLockReticle(ctx, state);
+
+    // ── 3. Cockpit Ordnance & Status (Bottom Left) ──────
+    drawCockpitStatus(ctx, player, h);
+
+    // ── 4. Tactical Radar / Minimap (Bottom Right) ──────
+    drawTacticalRadar(ctx, w, h, state);
+
+    // ── 5. Live Kill Feed (Top Right) ───────────────────
+    drawKillFeed(ctx, w, state);
+
+    // ── 6. Full Tactical Scoreboard (Held TAB) ──────────
+    if (input && input.scoreboard) {
+        drawScoreboard(ctx, w, h, state);
+    }
+
+    // ── 7. Audio Mute Indicator ─────────────────────────
+    ctx.save();
+    ctx.font = 'bold 11px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillStyle = state.isMuted ? '#ff9500' : '#64748b';
+    ctx.fillText(`[M] AUDIO: ${state.isMuted ? 'MUTED' : 'ON'}`, w - 24, 76);
+    ctx.restore();
+}
+
+function drawTeamScoreHeader(ctx, w, state) {
+    const teamNames = state.roomData ? state.roomData.teamNames : ['Crimson', 'Cobalt', 'Emerald', 'Solar'];
+    const teamScores = state.teamScores || [0, 0, 0, 0];
+    const cardW = 140;
+    const cardH = 46;
+    const gap = 12;
+    const totalW = cardW * 4 + gap * 3;
+    const startX = (w - totalW) / 2;
+    const startY = 14;
+
+    const allPlayers = [state.player, ...(state.remotePlayers || [])];
+
+    for (let t = 0; t < 4; t++) {
+        const x = startX + t * (cardW + gap);
+        const style = TEAM_COLORS[t];
+        const isMyTeam = state.player && state.player.team === t;
+        const livingCount = allPlayers.filter(p => p.team === t && p.alive).length;
+
+        // Card background
+        ctx.fillStyle = isMyTeam ? 'rgba(30, 41, 59, 0.9)' : 'rgba(15, 23, 42, 0.75)';
+        ctx.fillRect(x, startY, cardW, cardH);
+
+        // Top team color stripe
+        ctx.fillStyle = style.main;
+        ctx.fillRect(x, startY, cardW, 3);
+
+        if (isMyTeam) {
+            ctx.strokeStyle = style.main;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x, startY, cardW, cardH);
+        }
+
+        // Team Name & Score
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = 'bold 11px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = style.main;
+        const displayName = teamNames[t] ? teamNames[t].substring(0, 14) : `Team ${t + 1}`;
+        ctx.fillText(displayName, x + 8, startY + 8);
+
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${teamScores[t]} PTS`, x + 8, startY + 22);
+
+        // Living member pips (3 dots)
+        for (let dot = 0; dot < 3; dot++) {
+            ctx.beginPath();
+            ctx.arc(x + cardW - 12 - dot * 10, startY + 28, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = dot < livingCount ? style.main : 'rgba(255, 255, 255, 0.15)';
+            ctx.fill();
+        }
+    }
+}
+
+function drawTargetLockReticle(ctx, state) {
+    const player = state.player;
+    if (!player || !player.lockTargetId) return;
+
+    const allTargets = state.remotePlayers || [];
+    const target = allTargets.find(t => t.id === player.lockTargetId && t.alive);
+    if (!target) return;
+
+    const screenPos = worldToScreen(target.x, target.y);
+    const boxSize = 56;
+    const progress = player.lockProgress || 0;
+    const isLocked = progress >= 1.0;
 
     ctx.save();
+    ctx.translate(screenPos.x, screenPos.y);
 
-    // ── Semi-transparent background ─────────────────────
-    ctx.fillStyle = CONFIG.minimapBgColor;
-    ctx.fillRect(vx, vy, mw, mh);
+    const reticleColor = isLocked ? '#ff3b30' : '#ff9500';
+    ctx.strokeStyle = reticleColor;
+    ctx.lineWidth = 2;
 
-    // ── Coordinate grid / crosshairs ────────────────────
-    ctx.strokeStyle = CONFIG.minimapGridColor;
-    ctx.lineWidth = 1;
+    // Corner brackets
+    const bLen = 12;
+    const half = boxSize / 2;
+
+    // Top-left
     ctx.beginPath();
-    ctx.moveTo(vx + mw / 2, vy);
-    ctx.lineTo(vx + mw / 2, vy + mh);
-    ctx.moveTo(vx, vy + mh / 2);
-    ctx.lineTo(vx + mw, vy + mh / 2);
+    ctx.moveTo(-half, -half + bLen);
+    ctx.lineTo(-half, -half);
+    ctx.lineTo(-half + bLen, -half);
     ctx.stroke();
 
-    // Concentric range ring at half range
+    // Top-right
     ctx.beginPath();
-    ctx.arc(vx + mw / 2, vy + mh / 2, mw / 4, 0, Math.PI * 2);
+    ctx.moveTo(half - bLen, -half);
+    ctx.lineTo(half, -half);
+    ctx.lineTo(half, -half + bLen);
     ctx.stroke();
 
-    // ── Viewport clipping for internal blips ────────────
+    // Bottom-left
     ctx.beginPath();
-    ctx.rect(vx, vy, mw, mh);
-    ctx.clip();
+    ctx.moveTo(-half, half - bLen);
+    ctx.lineTo(-half, half);
+    ctx.lineTo(-half + bLen, half);
+    ctx.stroke();
 
-    // ── 1. Obstacles (gray/stone dots) ───────────────────
-    ctx.fillStyle = CONFIG.minimapDotObstacle;
-    for (let i = 0; i < state.obstacles.length; i++) {
-        const obs = state.obstacles[i];
-        if (!obs.alive) continue;
-        const pt = worldToMinimap(obs.x, obs.y, player.x, player.y, range, vx, vy, mw, mh);
-        if (!pt.inBounds) continue;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2.8, 0, Math.PI * 2);
-        ctx.fill();
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(half - bLen, half);
+    ctx.lineTo(half, half);
+    ctx.lineTo(half, half - bLen);
+    ctx.stroke();
+
+    // Rotary lock indicator
+    ctx.beginPath();
+    ctx.arc(0, 0, boxSize * 0.7, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+    ctx.strokeStyle = isLocked ? '#ff3b30' : '#60d5ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Status Text
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = reticleColor;
+    if (isLocked) {
+        ctx.fillText('► HARD LOCK — [F] / [R-CLICK] ◄', 0, half + 16);
+    } else {
+        ctx.fillText(`SEEKING... ${Math.round(progress * 100)}%`, 0, half + 16);
     }
 
-    // ── 2. Fuel pickups (green dots) ────────────────────
-    ctx.fillStyle = CONFIG.minimapDotPickup;
-    for (let i = 0; i < state.pickups.length; i++) {
-        const pk = state.pickups[i];
-        if (!pk.alive) continue;
-        const pt = worldToMinimap(pk.x, pk.y, player.x, player.y, range, vx, vy, mw, mh);
-        if (!pt.inBounds) continue;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
-        ctx.fill();
+    ctx.restore();
+}
+
+function drawCockpitStatus(ctx, player, h) {
+    const startX = 24;
+    const startY = h - 140;
+
+    // Health Bar
+    const barW = 220;
+    const barH = 14;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.fillRect(startX, startY, barW, barH);
+
+    const hpFrac = clamp(player.health / player.maxHealth, 0, 1);
+    const hpColor = hpFrac > 0.5 ? '#34c759' : hpFrac > 0.25 ? '#ff9500' : '#ff3b30';
+    ctx.fillStyle = hpColor;
+    ctx.fillRect(startX, startY, barW * hpFrac, barH);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.strokeRect(startX, startY, barW, barH);
+
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(`HULL INTEGRITY: ${Math.round(player.health)} / 100 HP`, startX, startY - 6);
+
+    // Shield Bar (if any)
+    if (player.shield > 0) {
+        const shieldFrac = clamp(player.shield / player.maxShield, 0, 1);
+        ctx.fillStyle = '#00c6ff';
+        ctx.fillRect(startX, startY + barH + 4, barW * shieldFrac, 6);
+        ctx.fillText(`KINETIC SHIELD: ${Math.round(player.shield)}`, startX + barW + 10, startY + barH + 10);
     }
 
-    // ── 3. Flares (yellow decoy dots) ───────────────────
-    ctx.fillStyle = '#ffcc00';
-    for (let i = 0; i < state.flares.length; i++) {
-        const f = state.flares[i];
-        if (!f.alive) continue;
-        const pt = worldToMinimap(f.x, f.y, player.x, player.y, range, vx, vy, mw, mh);
-        if (!pt.inBounds) continue;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2.0, 0, Math.PI * 2);
-        ctx.fill();
+    // Wing Missiles Readiness Rack
+    const missileY = startY + 36;
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('WING MISSILE PYLONS:', startX, missileY);
+
+    for (let m = 0; m < 2; m++) {
+        const mX = startX + 160 + m * 24;
+        const ready = player.missilesReady > m;
+        ctx.fillStyle = ready ? '#ff9500' : '#334155';
+        ctx.fillRect(mX, missileY - 12, 16, 14);
+        ctx.strokeStyle = ready ? '#ffffff' : '#64748b';
+        ctx.strokeRect(mX, missileY - 12, 16, 14);
     }
 
-    // ── 4. Missiles (color-coded by archetype) ──────────
-    for (let i = 0; i < state.missiles.length; i++) {
-        const m = state.missiles[i];
-        if (!m.alive) continue;
-        const pt = worldToMinimap(m.x, m.y, player.x, player.y, range, vx, vy, mw, mh);
-        if (!pt.inBounds) continue;
+    ctx.fillStyle = player.missilesReady > 0 ? '#ff9500' : '#64748b';
+    ctx.fillText(`[F] / [R-CLICK] TO FIRE (${player.missilesReady} READY)`, startX, missileY + 18);
 
-        const def = CONFIG.missileTypes[m.type] || CONFIG.missileTypes.standard;
-        const dotColor = m.disabledTimer > 0 ? '#44aaff' : (def.hudDot || '#ff4455');
-        const dotRadius = m.type === 'heavy' ? 3.8 : (m.type === 'hyper' ? 3.2 : 2.5);
+    // Guns and Flares
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText(`20MM GUN [C / L-CLICK]: ${player.ammoInMag} RDS`, startX, missileY + 36);
+    ctx.fillText(`FLARE DECOYS [Q]: ${player.flares} | EMP PULSE [E]: ${player.emp}`, startX, missileY + 54);
+}
 
-        ctx.fillStyle = dotColor;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, dotRadius, 0, Math.PI * 2);
-        ctx.fill();
+function drawTacticalRadar(ctx, w, h, state) {
+    const radarRadius = 80;
+    const cx = w - radarRadius - 24;
+    const cy = h - radarRadius - 24;
+    const worldRange = 2400; // max radar distance
 
-        // High-threat ring for Hyper and Heavy
-        if (m.type === 'hyper' && m.disabledTimer <= 0) {
-            ctx.strokeStyle = '#ff33ff';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, dotRadius + 2.5, 0, Math.PI * 2);
-            ctx.stroke();
+    ctx.save();
+    // Circular radar panel
+    ctx.beginPath();
+    ctx.arc(cx, cy, radarRadius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 15, 28, 0.75)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(96, 213, 255, 0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Range rings
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radarRadius * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Radar rotating sweep line
+    const sweep = (Date.now() / 1000) * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(sweep) * radarRadius, cy + Math.sin(sweep) * radarRadius);
+    ctx.strokeStyle = 'rgba(96, 213, 255, 0.25)';
+    ctx.stroke();
+
+    const player = state.player;
+    if (!player) {
+        ctx.restore();
+        return;
+    }
+
+    // Local player in center (White triangle facing up)
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 5);
+    ctx.lineTo(cx - 4, cy + 4);
+    ctx.lineTo(cx + 4, cy + 4);
+    ctx.closePath();
+    ctx.fill();
+
+    // Health Kits on Radar
+    if (state.pickups) {
+        for (const pk of state.pickups) {
+            if (!pk.alive) continue;
+            const dx = pk.x - player.x;
+            const dy = pk.y - player.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < worldRange) {
+                const rx = cx + (dx / worldRange) * radarRadius;
+                const ry = cy + (dy / worldRange) * radarRadius;
+                ctx.fillStyle = pk.type === 'health' ? '#34c759' : '#007aff';
+                ctx.fillRect(rx - 2, ry - 2, 4, 4);
+            }
         }
     }
 
-    // ── 5. Player (white dot at center + heading line) ──
-    const playerPt = worldToMinimap(player.x, player.y, player.x, player.y, range, vx, vy, mw, mh);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(playerPt.x, playerPt.y);
-    ctx.lineTo(
-        playerPt.x + Math.cos(player.heading) * 9,
-        playerPt.y + Math.sin(player.heading) * 9
-    );
-    ctx.stroke();
-
-    ctx.fillStyle = CONFIG.minimapDotPlayer;
-    ctx.beginPath();
-    ctx.arc(playerPt.x, playerPt.y, 3.2, 0, Math.PI * 2);
-    ctx.fill();
+    // Remote Players / Jets
+    const allRemotes = state.remotePlayers || [];
+    for (const other of allRemotes) {
+        if (!other.alive) continue;
+        const dx = other.x - player.x;
+        const dy = other.y - player.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < worldRange) {
+            const rx = cx + (dx / worldRange) * radarRadius;
+            const ry = cy + (dy / worldRange) * radarRadius;
+            const style = TEAM_COLORS[other.team % 4] || TEAM_COLORS[0];
+            ctx.fillStyle = style.main;
+            ctx.beginPath();
+            ctx.arc(rx, ry, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
 
     ctx.restore();
-
-    // ── Minimap border & label ──────────────────────────
-    ctx.strokeStyle = CONFIG.minimapBorderColor;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(vx, vy, mw, mh);
-
-    // Subtle label above the minimap
-    ctx.fillStyle = 'rgba(96, 213, 255, 0.7)';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText('RADAR', vx + mw, vy - 4);
 }
 
-/**
- * Draw the game-over score screen.
- * 
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} w
- * @param {number} h
- * @param {object} stats
- */
-export function drawGameOverScreen(ctx, w, h, stats) {
-    // Dark overlay
-    ctx.fillStyle = 'rgba(10, 10, 30, 0.88)';
+function drawKillFeed(ctx, w, state) {
+    const feed = state.killFeed || [];
+    const startX = w - 24;
+    const startY = 68;
+    const lineH = 26;
+
+    ctx.save();
+    ctx.textAlign = 'right';
+    ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+
+    const recent = feed.slice(-5);
+    for (let i = 0; i < recent.length; i++) {
+        const item = recent[i];
+        const y = startY + i * lineH;
+        const killerTeam = TEAM_COLORS[item.killerTeam % 4] || TEAM_COLORS[0];
+        const victimTeam = TEAM_COLORS[item.targetTeam % 4] || TEAM_COLORS[0];
+
+        // Background pill
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+        ctx.fillRect(startX - 260, y - 14, 260, 22);
+
+        // Killer name
+        ctx.fillStyle = killerTeam.main;
+        const text = `${item.killerName} ──[${item.weapon}]──> `;
+        ctx.fillText(text, startX - 70, y);
+
+        // Victim name
+        ctx.fillStyle = victimTeam.main;
+        ctx.fillText(item.targetName, startX - 10, y);
+    }
+    ctx.restore();
+}
+
+function drawScoreboard(ctx, w, h, state) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(10, 15, 30, 0.88)';
+    ctx.fillRect(0, 0, w, h);
+
+    const tableW = 860;
+    const startX = (w - tableW) / 2;
+    const startY = 80;
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 24px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#60d5ff';
+    ctx.fillText('SQUADRON COMBAT SCOREBOARD [TAB]', w / 2, startY);
+
+    const allPlayers = [state.player, ...(state.remotePlayers || [])];
+    const teamNames = state.roomData ? state.roomData.teamNames : ['Crimson', 'Cobalt', 'Emerald', 'Solar'];
+
+    let currY = startY + 40;
+
+    for (let t = 0; t < 4; t++) {
+        const style = TEAM_COLORS[t];
+        const teamPlayers = allPlayers.filter(p => p.team === t);
+        const teamScore = state.teamScores ? state.teamScores[t] : 0;
+
+        // Team Header
+        ctx.fillStyle = style.dark;
+        ctx.fillRect(startX, currY, tableW, 28);
+        ctx.fillStyle = style.main;
+        ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`TEAM ${t + 1}: ${teamNames[t]} (${teamScore} PTS)`, startX + 16, currY + 19);
+
+        currY += 32;
+
+        // Pilot Rows
+        ctx.font = '12px monospace';
+        for (const p of teamPlayers) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.fillRect(startX, currY, tableW, 24);
+
+            ctx.fillStyle = p.alive ? '#ffffff' : '#64748b';
+            ctx.fillText(p.name + (p.isBot ? ' [BOT]' : '') + (p.id === state.player.id ? ' (YOU)' : ''), startX + 24, currY + 16);
+
+            ctx.textAlign = 'right';
+            ctx.fillText(p.alive ? 'ACTIVE' : 'DOWNED', startX + 400, currY + 16);
+            ctx.fillText(`KILLS: ${p.kills || 0}`, startX + 540, currY + 16);
+            ctx.fillText(`DEATHS: ${p.deaths || 0}`, startX + 680, currY + 16);
+            ctx.fillText(`SCORE: ${p.score || 0}`, startX + 820, currY + 16);
+            ctx.textAlign = 'left';
+
+            currY += 26;
+        }
+
+        currY += 12;
+    }
+
+    ctx.restore();
+}
+
+export function drawGameOverScreen(ctx, w, h, state) {
+    ctx.fillStyle = 'rgba(10, 10, 30, 0.9)';
     ctx.fillRect(0, 0, w, h);
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // "GAME OVER"
     ctx.shadowColor = '#ff3344';
-    ctx.shadowBlur = 25;
-    ctx.fillStyle = '#ff4455';
-    ctx.font = 'bold 48px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('GAME OVER', w / 2, h * 0.25);
+    ctx.shadowBlur = 24;
+    ctx.fillStyle = '#ff3344';
+    ctx.font = 'bold 44px "Segoe UI", Arial, sans-serif';
+    ctx.fillText('AIRCRAFT DESTROYED', w / 2, h * 0.28);
     ctx.shadowBlur = 0;
 
-    // Stats
-    const statLines = [
-        ['Time Survived', formatTime(stats.timeSurvived)],
-        ['Missiles Destroyed', String(stats.missilesDestroyed)],
-        ['Near Misses', String(stats.nearMisses)],
-        ['Fuel Collected', String(stats.fuelCollected)],
-    ];
-
-    const startY = h * 0.42;
-    const lineH = 34;
-
-    for (let i = 0; i < statLines.length; i++) {
-        const y = startY + i * lineH;
-
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#8899aa';
-        ctx.font = '16px monospace';
-        ctx.fillText(statLines[i][0], w / 2 - 20, y);
-
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px monospace';
-        ctx.fillText(statLines[i][1], w / 2 + 20, y);
-    }
-
-    // "Press SPACE to Restart"
-    const pulse = 0.5 + Math.sin(Date.now() / 400) * 0.5;
-    ctx.textAlign = 'center';
+    const pulse = 0.6 + Math.sin(Date.now() / 400) * 0.4;
     ctx.fillStyle = `rgba(96, 213, 255, ${pulse})`;
     ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('[ Press SPACE to Restart ]', w / 2, h * 0.78);
+    ctx.fillText('[ Press SPACE or R to Restart ]', w / 2, h * 0.68);
 }
 
-/**
- * Format seconds as MM:SS.T
- * Rounds to tenths BEFORE splitting into minutes/seconds so that e.g.
- * 59.96s displays as "02:00.0" instead of the rounding artifact "01:60.0".
- */
-function formatTime(seconds) {
-    const totalTenths = Math.round(seconds * 10);
-    const mins = Math.floor(totalTenths / 600);
-    const secs = (totalTenths % 600) / 10;
-    return `${String(mins).padStart(2, '0')}:${secs.toFixed(1).padStart(4, '0')}`;
-}
-
-/**
- * Render tactical cockpit airspeed indicator (Speedometer) in bottom-left.
- * Accurately displays real-time dynamic forward velocity and turning drag.
- * 
- * @param {CanvasRenderingContext2D} ctx
- * @param {object} player
- * @param {number} w
- * @param {number} h
- */
-export function drawSpeedometer(ctx, player, w, h) {
-    if (!player) return;
-
-    const cx = 95;
-    const cy = h - 90;
-    const r = 50;
-    const curSpeed = player.speed || 0;
-    const maxGaugeSpeed = 400; // gauge range: 0 to 400 px/s
+export function drawVictoryScreen(ctx, w, h, state) {
+    const endData = state.matchEndData || {
+        winnerTeam: 0,
+        winnerTeamName: 'Crimson Vanguard',
+        winnerColor: '#ff3b30',
+        teamScores: [500, 320, 210, 150],
+        players: [],
+    };
 
     ctx.save();
+    // Backdrop blur / overlay
+    ctx.fillStyle = 'rgba(6, 11, 25, 0.88)';
+    ctx.fillRect(0, 0, w, h);
 
-    // 1. Semi-transparent housing background
-    ctx.beginPath();
-    ctx.arc(cx, cy, r + 14, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(10, 15, 28, 0.65)';
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(96, 213, 255, 0.35)';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    const winnerColor = endData.winnerColor || TEAM_COLORS[endData.winnerTeam]?.main || '#ff3b30';
 
-    // 2. Bezel tick marks and dial arc (from 135° to 405°, 270° total span)
-    const startAngle = Math.PI * 0.75; // 135 deg (bottom-left)
-    const arcSpan = Math.PI * 1.5;    // 270 deg span to bottom-right
-    const endAngle = startAngle + arcSpan;
+    // Ambient radial glow behind banner
+    const glowGrad = ctx.createRadialGradient(w / 2, h * 0.32, 20, w / 2, h * 0.32, 450);
+    glowGrad.addColorStop(0, winnerColor + '55');
+    glowGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(0, 0, w, h);
 
-    // Track arc background
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, startAngle, endAngle);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-    ctx.lineWidth = 6;
-    ctx.stroke();
+    // Modal Box
+    const boxW = Math.min(840, w - 80);
+    const boxH = Math.min(560, h - 80);
+    const boxX = (w - boxW) / 2;
+    const boxY = (h - boxH) / 2;
 
-    // Active speed arc
-    const speedRatio = clamp(curSpeed / maxGaugeSpeed, 0, 1);
-    const curAngle = startAngle + arcSpan * speedRatio;
-
-    let arcColor = '#60d5ff'; // cruise blue
-    if (player.boosting) {
-        arcColor = '#ff7700'; // boost orange
-    } else if (player.isTurning) {
-        arcColor = '#ffbb22'; // turn drag amber
-    }
-
-    ctx.save();
-    ctx.shadowColor = arcColor;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, startAngle, curAngle);
-    ctx.strokeStyle = arcColor;
-    ctx.lineWidth = 6;
-    ctx.stroke();
-    ctx.restore();
-
-    // Tick marks at 0, 100, 200, 300, 400
-    for (let s = 0; s <= 400; s += 100) {
-        const t = s / 400;
-        const a = startAngle + arcSpan * t;
-        const x1 = cx + Math.cos(a) * (r - 7);
-        const y1 = cy + Math.sin(a) * (r - 7);
-        const x2 = cx + Math.cos(a) * (r + 1);
-        const y2 = cy + Math.sin(a) * (r + 1);
-
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-    }
-
-    // Needle pointer
-    const needleX = cx + Math.cos(curAngle) * (r - 4);
-    const needleY = cy + Math.sin(curAngle) * (r - 4);
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(needleX, needleY);
-    ctx.strokeStyle = '#ffffff';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+    ctx.strokeStyle = winnerColor;
     ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+        ctx.roundRect(boxX, boxY, boxW, boxH, 16);
+    } else {
+        ctx.rect(boxX, boxY, boxW, boxH);
+    }
+    ctx.fill();
     ctx.stroke();
 
-    // Needle center hub
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-
-    // Digital readout in center
+    // Crown / Star Trophy icon
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.font = '32px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('★ ★ ★', w / 2, boxY + 45);
+
+    // Big Victory Title
+    ctx.font = 'bold 36px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = winnerColor;
+    ctx.shadowColor = winnerColor;
+    ctx.shadowBlur = 20;
+    ctx.fillText('AIRSPACE CONQUERED', w / 2, boxY + 90);
+    ctx.shadowBlur = 0;
+
+    // Subtitle with winner name
+    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 18px monospace';
-    ctx.fillText(`${Math.round(curSpeed)}`, cx, cy + 10);
+    ctx.fillText(`${(endData.winnerTeamName || 'VICTORY').toUpperCase()} CLAIMS THE SKIES!`, w / 2, boxY + 128);
 
-    ctx.fillStyle = '#8899aa';
-    ctx.font = '10px monospace';
-    ctx.fillText('KTS IAS', cx, cy + 24);
+    // Top Ace / MVP calculation
+    const allPlayers = endData.players && endData.players.length > 0
+        ? endData.players
+        : [state.player, ...(state.remotePlayers || [])].filter(Boolean);
+    const mvp = allPlayers.slice().sort((a, b) => (b.score || 0) - (a.score || 0))[0];
 
-    // Aerodynamic flight state badge above dial
-    let badgeText = 'CRUISE';
-    let badgeColor = '#60d5ff';
-    if (player.boosting) {
-        badgeText = 'AFTERBURNER';
-        badgeColor = '#ff7700';
-    } else if (player.isTurning) {
-        badgeText = 'G-DRAG';
-        badgeColor = '#ffbb22';
+    if (mvp) {
+        ctx.fillStyle = 'rgba(30, 41, 59, 0.8)';
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+        ctx.lineWidth = 1;
+        const mvpW = 420;
+        const mvpX = (w - mvpW) / 2;
+        const mvpY = boxY + 155;
+        ctx.fillRect(mvpX, mvpY, mvpW, 36);
+        ctx.strokeRect(mvpX, mvpY, mvpW, 36);
+
+        ctx.font = 'bold 12px monospace';
+        ctx.fillStyle = '#ffd700';
+        ctx.fillText(`TOP ACE MVP: ${mvp.name || 'Pilot'} — ${mvp.kills || 0} KILLS | ${mvp.score || 0} PTS`, w / 2, mvpY + 18);
     }
 
-    ctx.font = 'bold 11px monospace';
-    ctx.fillStyle = badgeColor;
-    ctx.fillText(badgeText, cx, cy - r - 22);
+    // 4 Team Standings Cards
+    const cardW = (boxW - 60) / 4;
+    const cardY = boxY + 215;
+    const teamScores = endData.teamScores || [0, 0, 0, 0];
+    const teamIndices = [0, 1, 2, 3].sort((a, b) => teamScores[b] - teamScores[a]);
+
+    for (let rank = 0; rank < 4; rank++) {
+        const t = teamIndices[rank];
+        const cardX = boxX + 20 + rank * (cardW + 5);
+        const col = TEAM_COLORS[t];
+
+        ctx.fillStyle = t === endData.winnerTeam ? 'rgba(30, 41, 59, 0.95)' : 'rgba(15, 23, 42, 0.7)';
+        ctx.fillRect(cardX, cardY, cardW - 10, 140);
+        ctx.strokeStyle = col.main;
+        ctx.lineWidth = t === endData.winnerTeam ? 2 : 1;
+        ctx.strokeRect(cardX, cardY, cardW - 10, 140);
+
+        // Rank Badge
+        ctx.font = 'bold 11px monospace';
+        ctx.fillStyle = rank === 0 ? '#ffd700' : rank === 1 ? '#e2e8f0' : '#94a3b8';
+        ctx.fillText(`#${rank + 1} PLACE`, cardX + (cardW - 10) / 2, cardY + 22);
+
+        // Team Name
+        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = col.main;
+        const tName = state.roomData?.teamNames?.[t] || col.name;
+        ctx.fillText(tName.substring(0, 14), cardX + (cardW - 10) / 2, cardY + 52);
+
+        // Score
+        ctx.font = 'bold 22px monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(`${teamScores[t]}`, cardX + (cardW - 10) / 2, cardY + 92);
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('POINTS', cardX + (cardW - 10) / 2, cardY + 112);
+    }
+
+    // Call to action button: Return to Lobby
+    const btnW = 320;
+    const btnH = 46;
+    const btnX = (w - btnW) / 2;
+    const btnY = boxY + boxH - 72;
+
+    const pulse = 0.85 + Math.sin(Date.now() / 250) * 0.15;
+    ctx.fillStyle = winnerColor;
+    ctx.globalAlpha = pulse;
+    ctx.fillRect(btnX, btnY, btnW, btnH);
+    ctx.globalAlpha = 1.0;
+
+    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('RETURN TO HANGAR LOBBY', w / 2, btnY + 23);
+
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('[ Press SPACE or Click Anywhere to Exit ]', w / 2, btnY + 62);
 
     ctx.restore();
 }
