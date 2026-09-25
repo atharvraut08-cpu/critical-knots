@@ -92,129 +92,182 @@ export function drawHUD(ctx, w, h, state) {
     if (!player) return;
 
     const margin = 20;
-    const barW = 180;
-    const barH = 12;
 
     // ── Survival Timer (top center) ─────────────────────
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px monospace';
-    ctx.fillText(formatTime(state.timeAlive), w / 2, margin);
+    const timerText = formatTime(state.timeAlive);
+    ctx.save();
+    ctx.font = 'bold 20px monospace';
+    const timerMetrics = ctx.measureText(timerText);
+    const pillW = timerMetrics.width + 32;
+    const pillH = 34;
+    const pillX = w / 2 - pillW / 2;
+    const pillY = margin - 6;
 
-    // ── Fuel Bar (top-left) ─────────────────────────────
-    const fuelX = margin;
-    const fuelY = margin;
-
-    // Label
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#aabbcc';
-    ctx.font = '12px monospace';
-    ctx.fillText('FUEL', fuelX, fuelY);
-
-    // Background (rounded track)
+    ctx.fillStyle = 'rgba(10, 16, 28, 0.65)';
     ctx.beginPath();
-    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.roundRect(pillX, pillY, pillW, pillH, 17);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(96, 213, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(timerText, w / 2, pillY + pillH / 2);
+    ctx.restore();
+
+    // ── Top-Left Tactical HUD Panel ─────────────────────
+    const panelX = 16;
+    const panelY = 16;
+    const panelW = 224;
+    const panelH = 186;
+
+    // Dark semi-transparent background panel
+    ctx.save();
+    ctx.fillStyle = 'rgba(10, 16, 28, 0.70)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, panelH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(96, 213, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const hudX = panelX + 16;
+    const hudW = panelW - 32; // 192 px width for bars
+
+    // ── 1. Fuel Bar ─────────────────────────────────────
+    const fuelLabelY = panelY + 14;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#c5d8ea';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('FUEL', hudX, fuelLabelY);
+
+    const fuelBarY = fuelLabelY + 18;
+    const fuelBarH = 10;
+    // Track
+    ctx.beginPath();
+    ctx.roundRect(hudX, fuelBarY, hudW, fuelBarH, fuelBarH / 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
     ctx.fill();
 
-    // Fill (always full with healthy green glow)
+    // Full green fuel bar
     const fuelColor = '#22cc77';
     ctx.save();
     ctx.shadowColor = fuelColor;
     ctx.shadowBlur = 6;
     ctx.beginPath();
-    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
+    ctx.roundRect(hudX, fuelBarY, hudW, fuelBarH, fuelBarH / 2);
     ctx.fillStyle = fuelColor;
     ctx.fill();
     ctx.restore();
 
-    // Border
     ctx.beginPath();
-    ctx.roundRect(fuelX, fuelY + 16, barW, barH, barH / 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.roundRect(hudX, fuelBarY, hudW, fuelBarH, fuelBarH / 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // ── Countermeasure Charges (top-left, below fuel) ───
-    const chargeY = fuelY + 40;
+    // ── 2. Flare Charges ────────────────────────────────
+    const flareY = fuelBarY + fuelBarH + 16;
+    ctx.fillStyle = '#c5d8ea';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('FLARE', hudX, flareY);
 
-    // Flare charges
-    ctx.fillStyle = '#aabbcc';
-    ctx.font = '12px monospace';
-    ctx.fillText('FLARE', fuelX, chargeY);
     for (let i = 0; i < player.maxFlares; i++) {
         const charged = i < player.flares;
+        const boxX = hudX + 54 + i * 19;
+        const boxY = flareY - 1;
+        const boxSize = 13;
+
         ctx.save();
         if (charged) {
             ctx.shadowColor = '#ffdd44';
-            ctx.shadowBlur = 5;
+            ctx.shadowBlur = 6;
         }
-        ctx.fillStyle = charged ? '#ffdd44' : 'rgba(255,255,255,0.15)';
+        ctx.fillStyle = charged ? '#ffdd44' : 'rgba(255, 255, 255, 0.12)';
         ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY, 12, 12, 3);
+        ctx.roundRect(boxX, boxY, boxSize, boxSize, 3);
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY, 12, 12, 3);
+        ctx.roundRect(boxX, boxY, boxSize, boxSize, 3);
         ctx.stroke();
     }
 
-    // EMP charges
-    ctx.fillStyle = '#aabbcc';
-    ctx.fillText('EMP', fuelX, chargeY + 20);
+    // ── 3. EMP Charges ──────────────────────────────────
+    const empY = flareY + 24;
+    ctx.fillStyle = '#c5d8ea';
+    ctx.fillText('EMP', hudX, empY);
+
     for (let i = 0; i < player.maxEmp; i++) {
         const charged = i < player.emp;
+        const boxX = hudX + 54 + i * 19;
+        const boxY = empY - 1;
+        const boxSize = 13;
+
         ctx.save();
         if (charged) {
             ctx.shadowColor = '#6688ff';
-            ctx.shadowBlur = 5;
+            ctx.shadowBlur = 6;
         }
-        ctx.fillStyle = charged ? '#6688ff' : 'rgba(255,255,255,0.15)';
+        ctx.fillStyle = charged ? '#6688ff' : 'rgba(255, 255, 255, 0.12)';
         ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY + 20, 12, 12, 3);
+        ctx.roundRect(boxX, boxY, boxSize, boxSize, 3);
         ctx.fill();
         ctx.restore();
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.beginPath();
-        ctx.roundRect(fuelX + 50 + i * 18, chargeY + 20, 12, 12, 3);
+        ctx.roundRect(boxX, boxY, boxSize, boxSize, 3);
         ctx.stroke();
     }
 
-    // ── Machine Gun & Magazine Ammo UI (below EMP) ───────
-    const gunY = chargeY + 44;
+    // ── 4. Machine Gun Ammo & Magazines UI ───────────────
     const ammoCount = player.ammoInMag !== undefined ? player.ammoInMag : CONFIG.magCapacity;
     const magsLeft = player.magsRemaining !== undefined ? player.magsRemaining : (CONFIG.maxMags - 1);
     const isReloading = !!player.reloading;
 
+    // Header label & status row
+    const gunLabelY = empY + 26;
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#aabbcc';
-    ctx.font = '12px monospace';
-    ctx.fillText('GUN AMMO', fuelX, gunY);
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#c5d8ea';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText('GUN AMMO', hudX, gunLabelY);
 
     if (isReloading) {
-        // Reload in progress banner & animated countdown bar
-        const reloadProg = Math.max(0, Math.min(1, (CONFIG.reloadDuration - player.reloadTimer) / CONFIG.reloadDuration));
         const timeLeft = Math.max(0, player.reloadTimer).toFixed(1);
-
         const blink = Math.sin(Date.now() / 140) > 0;
+        ctx.textAlign = 'right';
         ctx.fillStyle = blink ? '#ffcc00' : '#ff6622';
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText(`⚡ RELOAD ${timeLeft}s`, hudX + hudW, gunLabelY);
+    } else {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = ammoCount > 40 ? '#ffffff' : (ammoCount > 0 ? '#ffaa22' : '#ff4444');
         ctx.font = 'bold 12px monospace';
-        ctx.fillText(`⚡ RELOADING: ${timeLeft}s`, fuelX + 75, gunY);
+        ctx.fillText(`${ammoCount} / ${CONFIG.magCapacity}`, hudX + hudW, gunLabelY);
+    }
 
-        // Reload track
-        const rTrackW = barW;
-        const rTrackH = 8;
-        const rTrackY = gunY + 6;
+    // Ammo Bar / Reload Progress Bar row
+    const ammoBarY = gunLabelY + 18;
+    const ammoBarH = 6;
 
+    ctx.beginPath();
+    ctx.roundRect(hudX, ammoBarY, hudW, ammoBarH, 3);
+    ctx.fillStyle = isReloading ? 'rgba(255, 170, 40, 0.15)' : 'rgba(255, 255, 255, 0.12)';
+    ctx.fill();
+
+    if (isReloading) {
+        const reloadProg = Math.max(0, Math.min(1, (CONFIG.reloadDuration - player.reloadTimer) / CONFIG.reloadDuration));
         ctx.beginPath();
-        ctx.roundRect(fuelX, rTrackY, rTrackW, rTrackH, 4);
-        ctx.fillStyle = 'rgba(255, 170, 40, 0.15)';
-        ctx.fill();
-
-        ctx.beginPath();
-        ctx.roundRect(fuelX, rTrackY, Math.max(rTrackW * reloadProg, 4), rTrackH, 4);
+        ctx.roundRect(hudX, ammoBarY, Math.max(hudW * reloadProg, 3), ammoBarH, 3);
         ctx.fillStyle = '#ffaa22';
         ctx.fill();
 
@@ -222,41 +275,42 @@ export function drawHUD(ctx, w, h, state) {
         ctx.lineWidth = 1;
         ctx.stroke();
     } else {
-        // Numeric ammo in current magazine: e.g. "185 / 200"
-        ctx.textAlign = 'right';
-        ctx.fillStyle = ammoCount > 40 ? '#ffffff' : (ammoCount > 0 ? '#ffaa22' : '#ff4444');
-        ctx.font = 'bold 13px monospace';
-        ctx.fillText(`${ammoCount} / ${CONFIG.magCapacity}`, fuelX + barW, gunY);
-
-        // Magazine ammo bar track
         const ammoPct = ammoCount / CONFIG.magCapacity;
-        const aTrackW = barW;
-        const aTrackH = 5;
-        const aTrackY = gunY + 5;
+        if (hudW * ammoPct > 1) {
+            ctx.beginPath();
+            ctx.roundRect(hudX, ammoBarY, Math.max(hudW * ammoPct, 3), ammoBarH, 3);
+            ctx.fillStyle = ammoCount > 40 ? '#ffdd44' : '#ff5533';
+            ctx.fill();
+        }
 
-        ctx.beginPath();
-        ctx.roundRect(fuelX, aTrackY, aTrackW, aTrackH, 2.5);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    }
 
-        ctx.beginPath();
-        ctx.roundRect(fuelX, aTrackY, Math.max(aTrackW * ammoPct, 2), aTrackH, 2.5);
-        ctx.fillStyle = ammoCount > 40 ? '#ffdd44' : '#ff5533';
-        ctx.fill();
+    // Reserve Magazines row
+    const magRowY = ammoBarY + ammoBarH + 13;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#9cb3c9';
+    ctx.font = '10px monospace';
+    ctx.fillText(`MAGS: ${magsLeft} / ${CONFIG.maxMags - 1}`, hudX, magRowY + 5);
 
-        // Reserve Magazines indicator boxes
-        const magY = aTrackY + 13;
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#8899aa';
-        ctx.font = '10px monospace';
-        ctx.fillText(`MAGS: ${magsLeft} / ${CONFIG.maxMags - 1}`, fuelX, magY);
-
-        for (let m = 0; m < CONFIG.maxMags - 1; m++) {
-            const hasMag = m < magsLeft;
-            ctx.fillStyle = hasMag ? '#60d5ff' : 'rgba(255,255,255,0.12)';
-            ctx.fillRect(fuelX + 78 + m * 10, magY - 8, 7, 9);
+    const magBoxStartX = hudX + 86;
+    const magBoxY = magRowY;
+    const totalReserve = CONFIG.maxMags - 1; // 9
+    for (let m = 0; m < totalReserve; m++) {
+        const hasMag = m < magsLeft;
+        ctx.fillStyle = hasMag ? '#60d5ff' : 'rgba(255, 255, 255, 0.12)';
+        ctx.fillRect(magBoxStartX + m * 11, magBoxY, 8, 11);
+        if (hasMag) {
+            ctx.strokeStyle = 'rgba(160, 230, 255, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(magBoxStartX + m * 11, magBoxY, 8, 11);
         }
     }
+
+    ctx.restore();
 
     // ── Entity count debug display (top-right) ──────────
     ctx.textAlign = 'right';
@@ -430,17 +484,6 @@ export function drawMinimap(ctx, w, h, state) {
         ctx.fill();
     }
 
-    // ── 2. Fuel pickups (green dots) ────────────────────
-    ctx.fillStyle = CONFIG.minimapDotPickup;
-    for (let i = 0; i < state.pickups.length; i++) {
-        const pk = state.pickups[i];
-        if (!pk.alive) continue;
-        const pt = worldToMinimap(pk.x, pk.y, player.x, player.y, range, vx, vy, mw, mh);
-        if (!pt.inBounds) continue;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-    }
 
     // ── 3. Flares (yellow decoy dots) ───────────────────
     ctx.fillStyle = '#ffcc00';
@@ -540,7 +583,6 @@ export function drawGameOverScreen(ctx, w, h, stats) {
         ['Time Survived', formatTime(stats.timeSurvived)],
         ['Missiles Destroyed', String(stats.missilesDestroyed)],
         ['Near Misses', String(stats.nearMisses)],
-        ['Fuel Collected', String(stats.fuelCollected)],
     ];
 
     const startY = h * 0.42;

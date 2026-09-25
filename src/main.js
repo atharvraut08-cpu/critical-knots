@@ -13,7 +13,6 @@ import camera, { updateCamera, worldToScreen, isVisible, resetCamera } from './c
 import { createPlayer, updatePlayer, drawPlayer, drawBullet } from './entities/player.js';
 import { updateMissile, drawMissile } from './entities/missile.js';
 import { drawObstacle } from './entities/obstacle.js';
-import { updatePickup, drawPickup } from './entities/pickup.js';
 import { initParticles, updateParticles, drawParticles, emitTrail } from './entities/particle.js';
 import { checkAllCollisions } from './systems/collision.js';
 import { updateSpawner, scatterObstacles } from './systems/spawner.js';
@@ -144,11 +143,6 @@ function update(dt) {
     // Countermeasures (flare + EMP)
     updateCountermeasures(state, dt, keys);
 
-    // Update pickups
-    for (const pk of state.pickups) {
-        updatePickup(pk, dt);
-    }
-
     // Collision detection (centralized in systems/collision.js)
     checkAllCollisions(state);
 
@@ -198,7 +192,6 @@ function update(dt) {
     // alive: false is the only removal mechanism (never splice mid-loop)
     state.missiles = state.missiles.filter(e => e.alive);
     state.obstacles = state.obstacles.filter(e => e.alive);
-    state.pickups = state.pickups.filter(e => e.alive);
     state.bullets = state.bullets.filter(e => e.alive);
 }
 
@@ -237,13 +230,6 @@ function render() {
         drawObstacle(obs, ctx, sp);
     }
 
-    // ── Pickups ─────────────────────────────────────────
-    for (const pk of state.pickups) {
-        if (!pk.alive) continue;
-        if (!isVisible(pk.x, pk.y, w, h)) continue;
-        const sp = worldToScreen(pk.x, pk.y, w, h);
-        drawPickup(pk, ctx, sp);
-    }
 
     // ── Missiles ────────────────────────────────────────
     for (const m of state.missiles) {

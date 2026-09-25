@@ -20,7 +20,6 @@ const state = {
     // Entity arrays — filtered each frame by alive flag
     missiles: [],
     obstacles: [],
-    pickups: [],
     flares: [],             // active flare decoys in the world
     empWaves: [],           // active expanding electromagnetic pulse shockwaves
     bullets: [],            // active player machine gun projectiles
@@ -30,7 +29,6 @@ const state = {
 
     // Spawn timers
     missileSpawnTimer: 0,
-    pickupSpawnTimer: 0,
     flareRegenTimer: 0,
     empRegenTimer: 0,
 
@@ -42,7 +40,6 @@ const state = {
         timeSurvived: 0,
         missilesDestroyed: 0,
         nearMisses: 0,
-        fuelCollected: 0,
     },
 
     // Camera shake state (managed by camera.js, stored here for reset)
@@ -61,7 +58,6 @@ export function reset() {
 
     state.missiles.length = 0;
     state.obstacles.length = 0;
-    state.pickups.length = 0;
     state.flares.length = 0;
     state.empWaves.length = 0;
     state.bullets.length = 0;
@@ -69,7 +65,6 @@ export function reset() {
     state.player = null;
 
     state.missileSpawnTimer = CONFIG.warmupTime;
-    state.pickupSpawnTimer = CONFIG.pickupSpawnInterval;
     state.flareRegenTimer = 0;
     state.empRegenTimer = 0;
     state.hudGlitchTimer = 0;
@@ -77,7 +72,6 @@ export function reset() {
     state.stats.timeSurvived = 0;
     state.stats.missilesDestroyed = 0;
     state.stats.nearMisses = 0;
-    state.stats.fuelCollected = 0;
 
     state.shakeMagnitude = 0;
 }

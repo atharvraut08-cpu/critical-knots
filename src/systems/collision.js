@@ -53,7 +53,6 @@ export function checkAllCollisions(state) {
 
     const missiles = state.missiles;
     const obstacles = state.obstacles;
-    const pickups = state.pickups;
     const flares = state.flares;
 
     // ── 1. Player ↔ Missile ─────────────────────────────
@@ -95,21 +94,6 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 3. Player ↔ Pickup ──────────────────────────────
-    for (let i = 0; i < pickups.length; i++) {
-        const pk = pickups[i];
-        if (!pk.alive) continue;
-
-        if (circleCircle(player, pk)) {
-            pk.alive = false;
-            player.fuel = Math.min(player.fuel + pk.amount, player.maxFuel);
-            state.stats.fuelCollected++;
-            emit(pk.x, pk.y, 12, 'spark', '0,255,140', {
-                speedMin: 40,
-                speedMax: 110,
-            });
-        }
-    }
 
     // ── 4. Missile ↔ Obstacle ───────────────────────────
     for (let i = 0; i < missiles.length; i++) {

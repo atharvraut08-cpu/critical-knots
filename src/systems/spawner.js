@@ -12,7 +12,6 @@ import { randRange, randInt } from '../utils/math.js';
 import { distance, angleTo } from '../utils/vector.js';
 import { createMissile } from '../entities/missile.js';
 import { createObstacle } from '../entities/obstacle.js';
-import { createPickup } from '../entities/pickup.js';
 
 /**
  * Compute current missile spawn interval based on survival time.
@@ -72,13 +71,6 @@ export function updateSpawner(state, dt, canvasW, canvasH) {
         spawnMissile(state, player, canvasW, canvasH);
         state.missileSpawnTimer = getSpawnInterval(state.timeAlive);
     }
-
-    // ── Fuel Canister Spawning ──────────────────────────
-    state.pickupSpawnTimer -= dt;
-    if (state.pickupSpawnTimer <= 0) {
-        spawnPickup(state, player);
-        state.pickupSpawnTimer = CONFIG.pickupSpawnInterval;
-    }
 }
 
 /**
@@ -104,18 +96,6 @@ function spawnMissile(state, player, canvasW, canvasH) {
     state.missiles.push(createMissile(x, y, heading, type));
 }
 
-/**
- * Spawn fuel canister ahead of player flight corridor.
- */
-function spawnPickup(state, player) {
-    const dist = randRange(CONFIG.pickupSpawnRadius * 0.5, CONFIG.pickupSpawnRadius);
-    const angleSpread = randRange(-Math.PI / 3, Math.PI / 3);
-    const angle = player.heading + angleSpread;
-    const x = player.x + Math.cos(angle) * dist;
-    const y = player.y + Math.sin(angle) * dist;
-
-    state.pickups.push(createPickup(x, y));
-}
 
 /**
  * Scatter environmental mesa/cliff formations in the world.
