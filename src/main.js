@@ -19,7 +19,7 @@ import { checkAllCollisions, checkMultiplayerCollisions, spawnExplosion } from '
 import { updateSpawner, scatterObstacles } from './systems/spawner.js?v=2.4.0';
 import { updateCountermeasures, drawCountermeasures } from './systems/countermeasures.js?v=2.4.0';
 import { initParallax, drawParallax } from './systems/parallax.js?v=2.4.0';
-import { drawSky, drawVignette } from './render/sky.js?v=2.4.0';
+import { drawSky, drawVignette } from './render/sky.js?v=2.5.1';
 import { drawTitleScreen, drawHUD, drawGameOverScreen, drawMultiplayerHUD } from './render/hud.js?v=2.4.0';
 import { initLobby, showLobby } from './render/lobby.js?v=2.4.0';
 import net from './network/client.js?v=2.4.0';

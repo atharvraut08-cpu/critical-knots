@@ -1,9 +1,8 @@
 /**
- * sky.js — Cinema-Grade Atmosphere, God Rays, Volumetric Clouds, and Cinematic Vignette
+ * sky.js — Cinema-Grade Atmosphere, Volumetric Clouds, and Cinematic Vignette
  * 
  * Features:
  * - Dynamic Day/Dusk/Night color transitions with lerp
- * - Solar Crepuscular God Rays arcing across the stratosphere
  * - Volumetric procedural drifting cumulus clouds with soft radial falloff
  * - Tactical altitude combat grid for spatial awareness & depth
  * - Cinematic Screen Vignette & Supersonic Boost Streaks
@@ -70,7 +69,7 @@ export function getSkyColor(timeAlive) {
 }
 
 /**
- * Draw sun/moon celestial disc and solar crepuscular god rays.
+ * Draw sun/moon celestial disc.
  */
 function drawCelestialBody(ctx, canvasW, canvasH, timeAlive) {
     const t = clamp(timeAlive / CONFIG.skyLerpDuration, 0, 1);
@@ -90,30 +89,6 @@ function drawCelestialBody(ctx, canvasW, canvasH, timeAlive) {
         const glowColor = isSun ? '255,230,180' : '190,205,235';
 
         ctx.save();
-
-        // ── Crepuscular God Rays (Sun Only) ─────────────────
-        if (isSun && alpha > 0.15) {
-            ctx.globalCompositeOperation = 'lighter';
-            const rayCount = 8;
-            for (let r = 0; r < rayCount; r++) {
-                const angle = 0.5 + (r / rayCount) * 2.2 + Math.sin(Date.now() / 4000 + r) * 0.08;
-                const length = 550;
-                const rayWidth = 0.14;
-
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x + Math.cos(angle - rayWidth) * length, y + Math.sin(angle - rayWidth) * length);
-                ctx.lineTo(x + Math.cos(angle + rayWidth) * length, y + Math.sin(angle + rayWidth) * length);
-                ctx.closePath();
-
-                const rayGrad = ctx.createRadialGradient(x, y, 20, x, y, length);
-                rayGrad.addColorStop(0, `rgba(255, 240, 200, ${alpha * 0.15})`);
-                rayGrad.addColorStop(1, 'rgba(255, 240, 200, 0)');
-                ctx.fillStyle = rayGrad;
-                ctx.fill();
-            }
-            ctx.globalCompositeOperation = 'source-over';
-        }
 
         // Celestial outer glow halo
         const grad = ctx.createRadialGradient(x, y, 0, x, y, CONFIG.celestialGlowRadius);
