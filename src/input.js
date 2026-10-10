@@ -3,7 +3,7 @@
  * 
  * Maps keyboard events to a clean input state object.
  * Supports both arrow keys and WASD.
- * Handles debounced actions (restart, flare, emp, pause).
+ * Handles debounced actions (restart, flare, pause).
  */
 
 const keys = {
@@ -12,19 +12,19 @@ const keys = {
     boost: false,
     fire: false,     // continuous / held action (C key)
     flare: false,    // single-press action (Q key)
-    emp: false,      // single-press action (E key)
     restart: false,  // single-press action (Space or R)
     pause: false,    // single-press action (P key)
     start: false,    // single-press action (Space to start)
+    quitToMenu: false, // single-press action (Escape key)
 };
 
 // Track which action keys have been consumed this frame
 const consumed = {
     flare: false,
-    emp: false,
     restart: false,
     pause: false,
     start: false,
+    quitToMenu: false,
 };
 
 /**
@@ -57,14 +57,14 @@ export function initInput() {
                 if (!consumed.start) keys.start = true;
                 if (!consumed.restart) keys.restart = true;
                 break;
-            case 'KeyE':
-                if (!consumed.emp) keys.emp = true;
-                break;
             case 'KeyR':
                 if (!consumed.restart) keys.restart = true;
                 break;
             case 'KeyP':
                 if (!consumed.pause) keys.pause = true;
+                break;
+            case 'Escape':
+                if (!consumed.quitToMenu) keys.quitToMenu = true;
                 break;
         }
     });
@@ -93,14 +93,14 @@ export function initInput() {
                 consumed.start = false;
                 consumed.restart = false;
                 break;
-            case 'KeyE':
-                consumed.emp = false;
-                break;
             case 'KeyR':
                 consumed.restart = false;
                 break;
             case 'KeyP':
                 consumed.pause = false;
+                break;
+            case 'Escape':
+                consumed.quitToMenu = false;
                 break;
         }
     });

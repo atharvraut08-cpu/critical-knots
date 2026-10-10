@@ -16,16 +16,15 @@ export const CONFIG = {
     minTurnSpeedFactor: 0.60,   // speed floor while turning (60% of top speed)
     planeAccelRate: 150,        // px/s² straight-line acceleration back up to cruise
     planeBoostAccelRate: 280,   // px/s² acceleration while boosting
+    boostDecelRate: 135,        // px/s² smooth deceleration (momentum/drag) on releasing boost
 
     // ── Guns & Ammo System ──────────────────────────────
     gunFireRate: 0.075,         // seconds between shots (~13.3 rounds/sec)
     bulletSpeed: 950,           // px/s muzzle velocity
     bulletLife: 1.1,            // seconds before despawning (~1045px range)
     bulletRadius: 3.5,          // collision radius, px
-    magCapacity: 200,           // bullets per magazine
-    maxMags: 10,                // 10 magazines = 2,000 bullets total
-    totalBullets: 2000,         // total ammo supply
-    reloadDuration: 10.0,       // strict 10-second reload countdown
+    maxAmmo: 500,               // single hard-capped pool of 500 rounds total
+    totalBullets: 500,          // total ammo supply
 
     // ── Fuel ────────────────────────────────────────────
     maxFuel: 100,
@@ -106,8 +105,7 @@ export const CONFIG = {
     rocketRadius: 7,
 
     // ── Countermeasures: Flares ─────────────────────────
-    maxFlares: 3,
-    flareRegenTime: 18,         // seconds to regen 1 charge
+    maxFlares: 5,               // 5 static flares per run (no regeneration)
     flareCooldown: 0.8,         // seconds between uses
     flareBurstCount: 10,        // 8 to 12 flares deployed in a simultaneous burst
     flareSpreadAngle: 1.25,     // ~72 deg spread each side (wide fan pattern)
@@ -121,16 +119,6 @@ export const CONFIG = {
     flareSeekerFov: 1.35,       // ~77 deg seeker cone
     flareDetectionRadius: 480,  // px range to distract missiles
     flareAttractionChance: 0.90,// base chance to break missile lock
-
-    // ── Countermeasures: EMP ────────────────────────────
-    maxEmp: 1,
-    empRegenTime: 40,           // seconds to regen 1 charge
-    empCooldown: 1.2,           // seconds between uses
-    empRadius: 380,             // maximum pulse expansion radius, px
-    empExpansionSpeed: 640,     // wave expansion speed, px/s
-    empDisruptDurationMin: 2.5, // seconds disabled at edge
-    empDisruptDurationMax: 4.5, // seconds disabled at epicenter
-    empHudGlitchDuration: 0.55, // seconds of HUD static / digital noise
 
     // ── Camera ──────────────────────────────────────────
     cameraFollowSpeed: 4.0,     // lerp factor
@@ -159,12 +147,6 @@ export const CONFIG = {
     explosionParticleCount: 30, // particles per explosion burst
     trailEmitRate: 0.03,        // seconds between trail particle spawns
 
-    // ── Environmental Obstacles ─────────────────────────
-    obstacleCount: 16,          // total number of environmental obstacles
-    obstacleSpawnRadius: 2200,  // scatter within this world radius
-    obstacleMinRadius: 40,
-    obstacleMaxRadius: 110,
-
     // ── Pickups ─────────────────────────────────────────
     pickupSpawnInterval: 12,    // seconds between fuel canister spawns
     pickupRadius: 15,
@@ -189,7 +171,6 @@ export const CONFIG = {
     minimapGridColor: 'rgba(255, 255, 255, 0.08)',
     minimapDotPlayer: '#ffffff',
     minimapDotPickup: '#22cc77',
-    minimapDotObstacle: '#8899aa',
 
     // ── Internal Resolution ─────────────────────────────
     canvasWidth: 1280,

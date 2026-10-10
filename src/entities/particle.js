@@ -3,7 +3,7 @@
  * 
  * CG Concept: Parametric Particle Systems
  * Particles are spawned from emitters (plane exhaust, missile trails,
- * explosions, flares, EMP discharges). Alpha and size are interpolated
+ * explosions, flares). Alpha and size are interpolated
  * by life/maxLife as a pure function of the particle's age.
  * 
  * Performance: the pool is pre-allocated to CONFIG.maxParticles and reused

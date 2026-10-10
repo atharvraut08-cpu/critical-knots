@@ -1,5 +1,5 @@
 /**
- * missile.js — Multi-class threat entities with acceleration, EMP disruption, and flare spoofing
+ * missile.js — Multi-class threat entities with acceleration and flare spoofing
  * 
  * CG Concepts:
  * - Kinematic motion: velocity integration, acceleration curves, dt scaling
@@ -48,8 +48,6 @@ export function createMissile(x, y, heading, type = 'standard') {
         // Flare lock-break state
         confuseTarget: null,    // reference or { x, y } of tracked flare decoy
         confusedUntil: 0,
-        // EMP electronic disruption state
-        disabledTimer: 0,       // seconds guidance computer is offline
         age: 0,
         trailTimer: 0,
         sparkTimer: 0,
@@ -57,7 +55,7 @@ export function createMissile(x, y, heading, type = 'standard') {
 }
 
 /**
- * Update missile kinematics, seeker guidance, EMP disruption, and flare lock evaluation.
+ * Update missile kinematics, seeker guidance, and flare lock evaluation.
  * 
  * @param {object} missile
  * @param {number} dt
@@ -72,29 +70,10 @@ export function updateMissile(missile, dt, player, flares = [], now = 0) {
     missile.trailTimer -= dt;
     missile.sparkTimer -= dt;
 
-    // ── EMP Electronic Disruption ───────────────────────
-    if (missile.disabledTimer > 0) {
-        missile.disabledTimer -= dt;
-
-        // Guidance computer is offline: turn rate zeroed, missile wobbles ballistically
-        const wobble = Math.sin(missile.age * 18) * 0.12 * dt;
-        missile.heading += wobble;
-
-        // Spark particles flying from fried electronics
-        if (missile.sparkTimer <= 0) {
-            emit(missile.x, missile.y, 1, 'spark', '100,200,255', {
-                speedMin: 40,
-                speedMax: 110,
-                sizeMin: 1.2,
-                sizeMax: 2.8,
-            });
-            missile.sparkTimer = 0.08;
-        }
-    } else {
-        // ── Normal Kinematic Acceleration ───────────────────
-        if (missile.speed < missile.maxSpeed) {
-            missile.speed = Math.min(missile.maxSpeed, missile.speed + missile.accel * dt);
-        }
+    // ── Kinematic Acceleration ──────────────────────────
+    if (missile.speed < missile.maxSpeed) {
+        missile.speed = Math.min(missile.maxSpeed, missile.speed + missile.accel * dt);
+    }
 
         // ── Seeker Guidance & Flare Lock-Break Evaluation ───
         let targetX = player.x;
@@ -166,7 +145,6 @@ export function updateMissile(missile, dt, player, flares = [], now = 0) {
                 missile.turnRate * dt
             );
         }
-    }
 
     // ── Kinematic Position Integration ──────────────────
     missile.x += Math.cos(missile.heading) * missile.speed * dt;
@@ -216,7 +194,10 @@ export function drawMissile(missile, ctx, screenPos) {
         ctx.closePath();
         ctx.fill();
 
-        // Warhead nose cap
+        // Warhead nose cap with subtle neon warning glow
+        ctx.save();
+        ctx.shadowColor = '#ff2233';
+        ctx.shadowBlur = 10;
         ctx.fillStyle = '#cc1122';
         ctx.beginPath();
         ctx.moveTo(0, -r * 2.2);
@@ -224,6 +205,7 @@ export function drawMissile(missile, ctx, screenPos) {
         ctx.lineTo(r * 0.65, -r * 1.1);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
 
         // Hazard stripes on body
         ctx.fillStyle = '#ffaa00';
@@ -242,7 +224,10 @@ export function drawMissile(missile, ctx, screenPos) {
 
     } else if (type === 'fast') {
         // ── Falcon: Swept-Wing Interceptor ──────────────────
-        // Needle nose cone
+        // Needle nose cone with aerodynamic neon glow
+        ctx.save();
+        ctx.shadowColor = '#ff7700';
+        ctx.shadowBlur = 8;
         ctx.fillStyle = '#ff7700';
         ctx.beginPath();
         ctx.moveTo(0, -r * 2.3);
@@ -250,6 +235,7 @@ export function drawMissile(missile, ctx, screenPos) {
         ctx.lineTo(r * 0.45, -r * 0.8);
         ctx.closePath();
         ctx.fill();
+        ctx.restore();
 
         // Fuselage
         ctx.fillStyle = '#47505d';
@@ -285,10 +271,10 @@ export function drawMissile(missile, ctx, screenPos) {
         ctx.closePath();
         ctx.fill();
 
-        // Plasma heatshield nose tip
+        // Plasma heatshield nose tip with intense neon glow
         ctx.fillStyle = '#ff22cc';
         ctx.shadowColor = '#ff22cc';
-        ctx.shadowBlur = 10;
+        ctx.shadowBlur = 12;
         ctx.beginPath();
         ctx.moveTo(0, -r * 2.5);
         ctx.lineTo(-r * 0.25, -r * 1.5);
@@ -311,11 +297,15 @@ export function drawMissile(missile, ctx, screenPos) {
         ctx.fillStyle = '#d0d8e0';
         ctx.fillRect(-r * 0.45, -r * 0.9, r * 0.9, r * 2.1);
 
-        // Seeker glass dome & red warhead collar
+        // Seeker glass dome & red warhead collar with neon infrared glow
+        ctx.save();
+        ctx.shadowColor = '#ff3344';
+        ctx.shadowBlur = 8;
         ctx.fillStyle = '#ff3344';
         ctx.beginPath();
         ctx.arc(0, -r * 0.9, r * 0.45, Math.PI, 0);
         ctx.fill();
+        ctx.restore();
 
         // Forward steering canards
         ctx.fillStyle = '#333e4d';
@@ -339,18 +329,27 @@ export function drawMissile(missile, ctx, screenPos) {
         ctx.fill();
     }
 
-    // ── 3. Motor Exhaust Plume ──────────────────────────
-    // If disabled by EMP, motor sputters/dies
-    if (missile.disabledTimer <= 0) {
-        const flameColor = type === 'hyper' ? '#c033ff' : (type === 'fast' ? '#ffaa00' : '#ffdd44');
-        const flameLen = r * (0.8 + Math.random() * 0.6);
-        ctx.beginPath();
-        ctx.moveTo(-r * 0.3, r * 1.2);
-        ctx.lineTo(0, r * 1.2 + flameLen);
-        ctx.lineTo(r * 0.3, r * 1.2);
-        ctx.fillStyle = flameColor;
-        ctx.fill();
-    }
+    // ── 3. Motor Exhaust Plume with Neon Glow ───────────
+    const flameColor = type === 'hyper' ? '#c033ff' : (type === 'fast' ? '#ff7700' : '#ffcc00');
+    const flameLen = r * (0.85 + Math.random() * 0.6);
+    ctx.save();
+    ctx.shadowColor = flameColor;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.3, r * 1.2);
+    ctx.lineTo(0, r * 1.2 + flameLen);
+    ctx.lineTo(r * 0.3, r * 1.2);
+    ctx.fillStyle = flameColor;
+    ctx.fill();
+
+    // Hot incandescent plume core
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.14, r * 1.2);
+    ctx.lineTo(0, r * 1.2 + flameLen * 0.45);
+    ctx.lineTo(r * 0.14, r * 1.2);
+    ctx.fill();
+    ctx.restore();
 
     ctx.restore();
 }

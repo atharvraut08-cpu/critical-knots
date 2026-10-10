@@ -25,34 +25,15 @@ export function circleCircle(a, b) {
 }
 
 /**
- * Circle-AABB collision test (clamped-point method).
- * 
- * @param {{ x: number, y: number, radius: number }} circle
- * @param {{ x: number, y: number, w: number, h: number }} rect
- * @returns {boolean}
- */
-export function circleAABB(circle, rect) {
-    const halfW = rect.w / 2;
-    const halfH = rect.h / 2;
-    const closestX = Math.max(rect.x - halfW, Math.min(circle.x, rect.x + halfW));
-    const closestY = Math.max(rect.y - halfH, Math.min(circle.y, rect.y + halfH));
-
-    const dx = circle.x - closestX;
-    const dy = circle.y - closestY;
-    return (dx * dx + dy * dy) < (circle.radius * circle.radius);
-}
-
-/**
  * Run all collision checks for the current frame.
  * 
  * @param {object} state
  */
 export function checkAllCollisions(state) {
     const player = state.player;
-    if (!player || !player.alive) return;
+    if (!player || !player.alive || state.phase !== 'playing') return;
 
     const missiles = state.missiles;
-    const obstacles = state.obstacles;
     const flares = state.flares;
 
     // ── 1. Player ↔ Missile ─────────────────────────────
@@ -65,6 +46,10 @@ export function checkAllCollisions(state) {
             m.alive = false;
             spawnExplosion(player.x, player.y, true);
             spawnExplosion(m.x, m.y, false);
+            if (state.phase === 'playing') {
+                state.phase = 'gameover';
+                state.stats.timeSurvived = state.timeAlive;
+            }
             return;
         }
 
@@ -78,46 +63,7 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 2. Player ↔ Obstacle ────────────────────────────
-    for (let i = 0; i < obstacles.length; i++) {
-        const obs = obstacles[i];
-        if (!obs.alive) continue;
-
-        const hit = obs.shape === 'aabb'
-            ? circleAABB(player, obs)
-            : circleCircle(player, obs);
-
-        if (hit) {
-            player.alive = false;
-            spawnExplosion(player.x, player.y, true);
-            return;
-        }
-    }
-
-
-    // ── 4. Missile ↔ Obstacle ───────────────────────────
-    for (let i = 0; i < missiles.length; i++) {
-        const m = missiles[i];
-        if (!m.alive) continue;
-
-        for (let j = 0; j < obstacles.length; j++) {
-            const obs = obstacles[j];
-            if (!obs.alive) continue;
-
-            const hit = obs.shape === 'aabb'
-                ? circleAABB(m, obs)
-                : circleCircle(m, obs);
-
-            if (hit) {
-                m.alive = false;
-                state.stats.missilesDestroyed++;
-                spawnExplosion(m.x, m.y, false, m.type === 'heavy');
-                break;
-            }
-        }
-    }
-
-    // ── 5. Missile ↔ Missile ────────────────────────────
+    // ── 2. Missile ↔ Missile ────────────────────────────
     for (let i = 0; i < missiles.length; i++) {
         if (!missiles[i].alive) continue;
         for (let j = i + 1; j < missiles.length; j++) {
@@ -132,7 +78,7 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 6. Missile ↔ Flare Impact ───────────────────────
+    // ── 3. Missile ↔ Flare Impact ───────────────────────
     for (let i = 0; i < missiles.length; i++) {
         const m = missiles[i];
         if (!m.alive) continue;
@@ -152,7 +98,7 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 7. Bullet ↔ Missile & Obstacle (Asteroid) Impact ──
+    // ── 4. Bullet ↔ Missile Impact ──────────────────────
     const bullets = state.bullets;
     if (bullets && bullets.length > 0) {
         for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
@@ -169,41 +115,6 @@ export function checkAllCollisions(state) {
                     m.alive = false;
                     state.stats.missilesDestroyed++;
                     spawnExplosion(m.x, m.y, false, m.type === 'heavy');
-                    break;
-                }
-            }
-
-            if (!b.alive) continue;
-
-            // Check bullet against Obstacles / Asteroids
-            for (let oIdx = 0; oIdx < obstacles.length; oIdx++) {
-                const obs = obstacles[oIdx];
-                if (!obs.alive) continue;
-
-                const hit = obs.shape === 'aabb'
-                    ? circleAABB(b, obs)
-                    : circleCircle(b, obs);
-
-                if (hit) {
-                    b.alive = false;
-                    obs.alive = false;
-                    // Fragmentation debris & smoke on obstacle destruction
-                    emit(b.x, b.y, 16, 'spark', '255,200,100', {
-                        speedMin: 50,
-                        speedMax: 150,
-                        sizeMin: 1.5,
-                        sizeMax: 3.5,
-                        lifeMin: 0.15,
-                        lifeMax: 0.4,
-                    });
-                    emit(obs.x, obs.y, 10, 'smoke', '110,110,120', {
-                        speedMin: 20,
-                        speedMax: 70,
-                        sizeMin: 4,
-                        sizeMax: 12,
-                        lifeMin: 0.4,
-                        lifeMax: 0.9,
-                    });
                     break;
                 }
             }

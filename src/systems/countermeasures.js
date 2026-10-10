@@ -1,21 +1,18 @@
 /**
- * countermeasures.js — Believable Physical Flares & Expanding EMP Shockwaves
+ * countermeasures.js — Believable Physical Flares
  * 
  * CG Concepts:
  * - Kinematic motion & aerodynamic drag for physical flare trajectories
- * - Radial expanding wavefront propagation for EMP shockwave
  * - Atmospheric illumination & emission blending
  */
 
 import { CONFIG } from '../config.js';
-import { distance, lerp } from '../utils/vector.js';
 import { randRange } from '../utils/math.js';
 import { consumeAction } from '../input.js';
 import { emit } from '../entities/particle.js';
-import { applyShake } from '../camera.js';
 
 /**
- * Update countermeasure systems (flares + EMP waves).
+ * Update countermeasure systems (flares).
  * 
  * @param {object} state
  * @param {number} dt
@@ -25,30 +22,11 @@ export function updateCountermeasures(state, dt, input) {
     const player = state.player;
     if (!player || !player.alive) return;
 
-    // ── Charge Regeneration ─────────────────────────────
-    if (player.flares < player.maxFlares) {
-        state.flareRegenTimer += dt;
-        if (state.flareRegenTimer >= CONFIG.flareRegenTime) {
-            player.flares = Math.min(player.flares + 1, player.maxFlares);
-            state.flareRegenTimer = 0;
-        }
-    }
-
-    if (player.emp < player.maxEmp) {
-        state.empRegenTimer += dt;
-        if (state.empRegenTimer >= CONFIG.empRegenTime) {
-            player.emp = Math.min(player.emp + 1, player.maxEmp);
-            state.empRegenTimer = 0;
-        }
-    }
+    // Flares are a fixed finite supply of 5 charges for the entire run (no regeneration)
 
     // ── Input Triggers ──────────────────────────────────
     if (consumeAction('flare') && player.flares > 0 && player.flareCooldown <= 0) {
         activateFlares(state, player);
-    }
-
-    if (consumeAction('emp') && player.emp > 0 && player.empCooldown <= 0) {
-        activateEMP(state, player);
     }
 
     // ── Update Active Physical Flares ────────────────────
@@ -108,49 +86,6 @@ export function updateCountermeasures(state, dt, input) {
         }
     }
     state.flares = state.flares.filter(f => f.alive);
-
-    // ── Update Active Expanding EMP Shockwaves ───────────
-    for (let i = state.empWaves.length - 1; i >= 0; i--) {
-        const w = state.empWaves[i];
-        w.radius += w.speed * dt;
-
-        // Check wavefront collision with missiles
-        for (let j = 0; j < state.missiles.length; j++) {
-            const m = state.missiles[j];
-            if (!m.alive) continue;
-
-            const dist = distance(w, m);
-            // If wavefront has reached this missile
-            if (dist <= w.radius && !m._hitByEmpWave) {
-                m._hitByEmpWave = true;
-
-                // Distance-based disruption duration (longer closer to epicenter)
-                const distRatio = Math.min(dist / w.maxRadius, 1);
-                const duration = lerp(CONFIG.empDisruptDurationMax, CONFIG.empDisruptDurationMin, distRatio);
-
-                m.disabledTimer = Math.max(m.disabledTimer, duration);
-                m.confuseTarget = null; // drop lock
-
-                // Electrical discharge spark burst from missile
-                emit(m.x, m.y, 14, 'spark', '80,200,255', {
-                    speedMin: 50,
-                    speedMax: 140,
-                    sizeMin: 2,
-                    sizeMax: 4,
-                });
-            }
-        }
-
-        if (w.radius >= w.maxRadius) {
-            w.alive = false;
-        }
-    }
-    state.empWaves = state.empWaves.filter(w => w.alive);
-
-    // ── HUD Glitch Timer ────────────────────────────────
-    if (state.hudGlitchTimer > 0) {
-        state.hudGlitchTimer -= dt;
-    }
 }
 
 /**
@@ -213,44 +148,7 @@ function activateFlares(state, player) {
 }
 
 /**
- * Trigger high-speed expanding electromagnetic pulse wave.
- */
-function activateEMP(state, player) {
-    player.emp--;
-    player.empCooldown = CONFIG.empCooldown;
-
-    // Register active expanding shockwave
-    state.empWaves.push({
-        x: player.x,
-        y: player.y,
-        radius: 15,
-        maxRadius: CONFIG.empRadius,
-        speed: CONFIG.empExpansionSpeed,
-        alive: true,
-    });
-
-    // Reset hit flag on current missiles so new wave can hit them
-    for (const m of state.missiles) {
-        m._hitByEmpWave = false;
-    }
-
-    // Trigger cockpit HUD electrical interference static
-    state.hudGlitchTimer = CONFIG.empHudGlitchDuration;
-
-    // Electromagnetic discharge flash & screen shake
-    emit(player.x, player.y, 35, 'spark', '100,210,255', {
-        speedMin: 80,
-        speedMax: 240,
-        sizeMin: 2,
-        sizeMax: 5,
-        lifeMin: 0.2,
-        lifeMax: 0.5,
-    });
-    applyShake(CONFIG.shakeMaxMagnitude * 0.65);
-}
-
-/**
- * Draw active flares and EMP shockwaves with high-fidelity glow and electric arcs.
+ * Draw active flares with high-fidelity glow.
  * 
  * @param {object} state
  * @param {CanvasRenderingContext2D} ctx
@@ -298,53 +196,6 @@ export function drawCountermeasures(state, ctx, worldToScreenFn, canvasW, canvas
         ctx.beginPath();
         ctx.arc(sp.x, sp.y, Math.max(1.5, coreSize * 0.7), 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.restore();
-    }
-
-    // ── 2. Draw Expanding EMP Shockwaves ────────────────
-    for (const w of state.empWaves) {
-        if (!w.alive) continue;
-
-        const sp = worldToScreenFn(w.x, w.y, canvasW, canvasH);
-        const progress = w.radius / w.maxRadius; // 0 to 1
-        const alpha = (1 - progress) * 0.85;
-
-        ctx.save();
-
-        // Primary electric cyan shockwave ring
-        ctx.strokeStyle = `rgba(100, 220, 255, ${alpha})`;
-        ctx.lineWidth = Math.max(1.5, 4.5 * (1 - progress));
-        ctx.shadowColor = '#40d0ff';
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, w.radius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Secondary inner distortion ring
-        ctx.strokeStyle = `rgba(220, 245, 255, ${alpha * 0.7})`;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, Math.max(2, w.radius - 8), 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Procedural electric lightning crackles along wave rim
-        const arcCount = 10;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.9})`;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        for (let i = 0; i < arcCount; i++) {
-            const a1 = (i / arcCount) * Math.PI * 2 + Math.sin(w.radius * 0.05 + i) * 0.1;
-            const a2 = a1 + 0.18;
-            const rOffset = (Math.random() - 0.5) * 8;
-            const px1 = sp.x + Math.cos(a1) * (w.radius + rOffset);
-            const py1 = sp.y + Math.sin(a1) * (w.radius + rOffset);
-            const px2 = sp.x + Math.cos(a2) * (w.radius - rOffset);
-            const py2 = sp.y + Math.sin(a2) * (w.radius - rOffset);
-            ctx.moveTo(px1, py1);
-            ctx.lineTo(px2, py2);
-        }
-        ctx.stroke();
 
         ctx.restore();
     }

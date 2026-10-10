@@ -21,7 +21,6 @@ const state = {
     missiles: [],
     obstacles: [],
     flares: [],             // active flare decoys in the world
-    empWaves: [],           // active expanding electromagnetic pulse shockwaves
     bullets: [],            // active player machine gun projectiles
 
     // Player reference (set by main.js on game start)
@@ -30,10 +29,6 @@ const state = {
     // Spawn timers
     missileSpawnTimer: 0,
     flareRegenTimer: 0,
-    empRegenTimer: 0,
-
-    // HUD effect timers
-    hudGlitchTimer: 0,      // digital static distortion countdown
 
     // Stats for score screen
     stats: {
@@ -59,15 +54,12 @@ export function reset() {
     state.missiles.length = 0;
     state.obstacles.length = 0;
     state.flares.length = 0;
-    state.empWaves.length = 0;
     state.bullets.length = 0;
 
     state.player = null;
 
     state.missileSpawnTimer = CONFIG.warmupTime;
     state.flareRegenTimer = 0;
-    state.empRegenTimer = 0;
-    state.hudGlitchTimer = 0;
 
     state.stats.timeSurvived = 0;
     state.stats.missilesDestroyed = 0;

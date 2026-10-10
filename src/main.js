@@ -8,14 +8,13 @@
 
 import { CONFIG } from './config.js';
 import state, { reset } from './state.js';
-import keys, { initInput, consumeAction } from './input.js';
+import keys, { initInput, consumeAction, suppressAction } from './input.js';
 import camera, { updateCamera, worldToScreen, isVisible, resetCamera } from './camera.js';
 import { createPlayer, updatePlayer, drawPlayer, drawBullet } from './entities/player.js';
 import { updateMissile, drawMissile } from './entities/missile.js';
-import { drawObstacle } from './entities/obstacle.js';
 import { initParticles, updateParticles, drawParticles, emitTrail } from './entities/particle.js';
 import { checkAllCollisions } from './systems/collision.js';
-import { updateSpawner, scatterObstacles } from './systems/spawner.js';
+import { updateSpawner } from './systems/spawner.js';
 import { updateCountermeasures, drawCountermeasures } from './systems/countermeasures.js';
 import { initParallax, drawParallax } from './systems/parallax.js';
 import { drawSky } from './render/sky.js';
@@ -41,6 +40,7 @@ function checkMobileDevice() {
 
 // ── Game initialization ─────────────────────────────────
 let lastTime = 0;
+let gameOverCooldown = 0;
 
 function init() {
     checkMobileDevice();
@@ -62,16 +62,27 @@ function startGame() {
     initParticles();
     initParallax();
 
+    gameOverCooldown = 0;
     const player = createPlayer();
     state.player = player;
-
-    // Scatter obstacles around the world
-    scatterObstacles(state);
 
     // Reset camera to player position (no lag on start)
     resetCamera(player.x, player.y);
 
     state.phase = 'playing';
+}
+
+/**
+ * Return to the main title screen from gameover or paused states.
+ * Resets all entities, timers, and pause state cleanly.
+ */
+function returnToTitle() {
+    reset();
+    initParticles();
+    initParallax();
+    resetCamera(0, 0);
+    gameOverCooldown = 0;
+    state.phase = 'title';
 }
 
 // ── Main loop ───────────────────────────────────────────
@@ -89,18 +100,42 @@ function loop(timestamp) {
 
     // ── Phase-specific input handling ───────────────────
     if (state.phase === 'title') {
+        consumeAction('quitToMenu');
         if (consumeAction('start')) {
             startGame();
         }
     } else if (state.phase === 'gameover') {
-        // Debounced restart via Space (or R) — only on game-over screen
-        if (consumeAction('restart') || consumeAction('start')) {
+        if (gameOverCooldown > 0) {
+            gameOverCooldown -= dt;
+            consumeAction('restart');
+            consumeAction('start');
+        }
+
+        // Return to title screen on ESC
+        if (consumeAction('quitToMenu')) {
+            returnToTitle();
+        } else if (gameOverCooldown <= 0 && (consumeAction('restart') || consumeAction('start'))) {
+            // Debounced restart via Space (or R) — only on game-over screen after debounce cooldown
             startGame();
         }
     } else if (state.phase === 'playing') {
+        // Discard any restart/start inputs while playing so held or accidental Space/R presses don't leak into gameover
+        consumeAction('restart');
+        consumeAction('start');
+
         // Pause toggle
         if (consumeAction('pause')) {
             state.paused = !state.paused;
+        }
+
+        // Return to title screen if paused and ESC is pressed
+        if (state.paused) {
+            if (consumeAction('quitToMenu')) {
+                returnToTitle();
+            }
+        } else {
+            // Clear any unconsumed ESC press during active play so it doesn't linger into pause
+            consumeAction('quitToMenu');
         }
     }
 
@@ -140,14 +175,14 @@ function update(dt) {
         updateMissile(m, dt, player, state.flares, state.timeAlive);
     }
 
-    // Countermeasures (flare + EMP)
+    // Countermeasures (flares)
     updateCountermeasures(state, dt, keys);
 
     // Collision detection (centralized in systems/collision.js)
     checkAllCollisions(state);
 
     // Check if player died from collision
-    if (!player.alive) {
+    if (!player.alive || state.phase === 'gameover') {
         onPlayerDeath();
         return;
     }
@@ -171,7 +206,7 @@ function update(dt) {
             const tailX = m.x - Math.cos(m.heading) * m.radius;
             const tailY = m.y - Math.sin(m.heading) * m.radius;
             const mDef = CONFIG.missileTypes[m.type] || CONFIG.missileTypes.standard;
-            const trailColor = m.disabledTimer > 0 ? '120,180,220' : mDef.smokeColor;
+            const trailColor = mDef.smokeColor;
             emitTrail(tailX, tailY, m.heading, trailColor);
             m.trailTimer = mDef.trailRate || (CONFIG.trailEmitRate * 1.5);
         }
@@ -191,13 +226,20 @@ function update(dt) {
     // ── End-of-frame cleanup: filter dead entities ──────
     // alive: false is the only removal mechanism (never splice mid-loop)
     state.missiles = state.missiles.filter(e => e.alive);
-    state.obstacles = state.obstacles.filter(e => e.alive);
     state.bullets = state.bullets.filter(e => e.alive);
 }
 
 function onPlayerDeath() {
-    state.stats.timeSurvived = state.timeAlive;
-    state.phase = 'gameover';
+    if (state.phase !== 'gameover') {
+        state.stats.timeSurvived = state.timeAlive;
+        state.phase = 'gameover';
+    }
+    // Strictly debounce and clear restart inputs on the frame of impact
+    gameOverCooldown = 0.6;
+    consumeAction('restart');
+    consumeAction('start');
+    suppressAction('restart');
+    suppressAction('start');
 }
 
 // ── Render orchestrator ─────────────────────────────────
@@ -221,15 +263,6 @@ function render() {
 
     // ── Parallax background ─────────────────────────────
     drawParallax(ctx, camera, w, h);
-
-    // ── Obstacles ───────────────────────────────────────
-    for (const obs of state.obstacles) {
-        if (!obs.alive) continue;
-        if (!isVisible(obs.x, obs.y, w, h)) continue;
-        const sp = worldToScreen(obs.x, obs.y, w, h);
-        drawObstacle(obs, ctx, sp);
-    }
-
 
     // ── Missiles ────────────────────────────────────────
     for (const m of state.missiles) {

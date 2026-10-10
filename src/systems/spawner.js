@@ -1,17 +1,14 @@
 /**
- * spawner.js — Threat escalation spawner & terrain generation
+ * spawner.js — Threat escalation spawner
  * 
  * Manages:
  * - Dynamic missile archetype escalation based on survival time
- * - Environmental mesa and cliff formations
- * - Fuel canister distribution
  */
 
 import { CONFIG } from '../config.js';
 import { randRange, randInt } from '../utils/math.js';
 import { distance, angleTo } from '../utils/vector.js';
 import { createMissile } from '../entities/missile.js';
-import { createObstacle } from '../entities/obstacle.js';
 
 /**
  * Compute current missile spawn interval based on survival time.
@@ -98,22 +95,10 @@ function spawnMissile(state, player, canvasW, canvasH) {
 
 
 /**
- * Scatter environmental mesa/cliff formations in the world.
+ * Scatter environmental obstacles (Removed).
  * 
  * @param {object} state
  */
 export function scatterObstacles(state) {
-    state.obstacles.length = 0;
-
-    // ── Mesa / Cliff Formations ──────────────────────────
-    const cliffCount = CONFIG.obstacleCount || 14;
-    for (let i = 0; i < cliffCount; i++) {
-        const angle = (i / cliffCount) * Math.PI * 2 + randRange(-0.2, 0.2);
-        const dist = randRange(350, CONFIG.obstacleSpawnRadius * 0.95);
-        const x = Math.cos(angle) * dist;
-        const y = Math.sin(angle) * dist;
-        const size = randRange(55, 95);
-
-        state.obstacles.push(createObstacle(x, y, 'cliff', size));
-    }
+    if (state.obstacles) state.obstacles.length = 0;
 }

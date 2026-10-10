@@ -34,21 +34,15 @@ export function createPlayer() {
         maxFuel: CONFIG.maxFuel,
         flares: CONFIG.maxFlares,
         maxFlares: CONFIG.maxFlares,
-        emp: CONFIG.maxEmp,
-        maxEmp: CONFIG.maxEmp,
         flareCooldown: 0,
-        empCooldown: 0,
         radius: CONFIG.playerRadius,
         alive: true,
         boosting: false,
         trailTimer: 0,
 
-        // ── Guns & Ammo System (2,000 rounds / 10 magazines) ──
-        ammoInMag: CONFIG.magCapacity,       // 200 rounds in active mag
-        magsRemaining: CONFIG.maxMags - 1,   // 9 reserve magazines (10 total)
-        reloading: false,                    // true when 10-second reload in progress
-        reloadTimer: 0,                      // countdown timer for active reload
-        reloadDuration: CONFIG.reloadDuration,
+        // ── Guns & Ammo System (Single Hard-Capped Pool of 500 rounds) ──
+        ammo: CONFIG.maxAmmo || 500,
+        maxAmmo: CONFIG.maxAmmo || 500,
         fireTimer: 0,                        // rate of fire limiter
 
         // ── Flight Aerodynamics State ───────────────────
@@ -58,7 +52,7 @@ export function createPlayer() {
 
 /**
  * Update player state each frame.
- * CG Concept: Kinematic motion with induced aerodynamic drag
+ * CG Concept: Kinematic motion with induced aerodynamic drag & momentum deceleration
  * 
  * @param {object} player
  * @param {number} dt
@@ -76,86 +70,75 @@ export function updatePlayer(player, dt, input) {
     player.boosting = !!input.boost;
 
     // Target top speed based on engine throttle/boost
-    const targetTopSpeed = player.boosting
-        ? CONFIG.playerBaseSpeed * CONFIG.boostMultiplier
-        : CONFIG.playerBaseSpeed;
+    const cruiseSpeed = CONFIG.playerBaseSpeed;
+    const maxBoostSpeed = cruiseSpeed * CONFIG.boostMultiplier;
+    const targetTopSpeed = player.boosting ? maxBoostSpeed : cruiseSpeed;
 
-    // ── Physics-Based Speed & Induced Drag ──────────────
-    // CG Concept: Aerodynamic induced drag — banking bleeds forward kinetic energy.
-    // Flying straight allows thrust acceleration back up to maximum velocity.
+    // ── Physics-Based Speed, Induced Drag & Gradual Deceleration ──
+    // CG Concept: Aerodynamic induced drag & forward kinetic momentum.
+    // Releasing boost smoothly bleeds off speed via deceleration (momentum/drag),
+    // ensuring the HUD airspeed needle sweeps down naturally.
     if (player.isTurning) {
         const turnFloor = targetTopSpeed * CONFIG.minTurnSpeedFactor;
-        player.speed = Math.max(turnFloor, player.speed - CONFIG.turnDragDecel * dt);
+        if (player.speed > turnFloor) {
+            player.speed = Math.max(turnFloor, player.speed - CONFIG.turnDragDecel * dt);
+        }
     } else {
-        const accel = player.boosting ? CONFIG.planeBoostAccelRate : CONFIG.planeAccelRate;
-        player.speed = Math.min(targetTopSpeed, player.speed + accel * dt);
+        if (player.speed < targetTopSpeed) {
+            // Forward thrust acceleration towards target speed
+            const accel = player.boosting ? CONFIG.planeBoostAccelRate : CONFIG.planeAccelRate;
+            player.speed = Math.min(targetTopSpeed, player.speed + accel * dt);
+        } else if (player.speed > targetTopSpeed) {
+            // Gradual aerodynamic deceleration (momentum/drag) upon releasing boost
+            const decel = CONFIG.boostDecelRate || 135;
+            player.speed = Math.max(targetTopSpeed, player.speed - decel * dt);
+        }
     }
 
     // ── Kinematic Position Integration ──────────────────
     player.x += Math.cos(player.heading) * player.speed * dt;
     player.y += Math.sin(player.heading) * player.speed * dt;
 
-    // ── Gun Reload Countdown ────────────────────────────
-    if (player.reloading) {
-        player.reloadTimer -= dt;
-        if (player.reloadTimer <= 0) {
-            player.reloading = false;
-            player.reloadTimer = 0;
-            player.ammoInMag = CONFIG.magCapacity;
-        }
-    }
-
     if (player.fireTimer > 0) {
         player.fireTimer -= dt;
     }
 
     // ── Machine Gun Firing ('C' key) ────────────────────
-    if (input.fire && !player.reloading && player.fireTimer <= 0) {
-        if (player.ammoInMag > 0) {
-            player.ammoInMag--;
-            player.fireTimer = CONFIG.gunFireRate;
+    if (input.fire && player.fireTimer <= 0 && player.ammo > 0) {
+        player.ammo--;
+        player.fireTimer = CONFIG.gunFireRate;
 
-            // Spawn bullet directly at needle radome nose
-            const noseDist = player.radius * 1.75;
-            const noseX = player.x + Math.cos(player.heading) * noseDist;
-            const noseY = player.y + Math.sin(player.heading) * noseDist;
+        // Spawn bullet directly at needle radome nose
+        const noseDist = player.radius * 2.1;
+        const noseX = player.x + Math.cos(player.heading) * noseDist;
+        const noseY = player.y + Math.sin(player.heading) * noseDist;
 
-            // Muzzle velocity combined with current dynamic aircraft forward speed
-            const totalBulletSpeed = player.speed + CONFIG.bulletSpeed;
-            const bvx = Math.cos(player.heading) * totalBulletSpeed;
-            const bvy = Math.sin(player.heading) * totalBulletSpeed;
+        // Muzzle velocity combined with current dynamic aircraft forward speed
+        const totalBulletSpeed = player.speed + CONFIG.bulletSpeed;
+        const bvx = Math.cos(player.heading) * totalBulletSpeed;
+        const bvy = Math.sin(player.heading) * totalBulletSpeed;
 
-            state.bullets.push({
-                x: noseX,
-                y: noseY,
-                vx: bvx,
-                vy: bvy,
-                heading: player.heading,
-                radius: CONFIG.bulletRadius,
-                life: CONFIG.bulletLife,
-                maxLife: CONFIG.bulletLife,
-                alive: true,
-            });
+        state.bullets.push({
+            x: noseX,
+            y: noseY,
+            vx: bvx,
+            vy: bvy,
+            heading: player.heading,
+            radius: CONFIG.bulletRadius,
+            life: CONFIG.bulletLife,
+            maxLife: CONFIG.bulletLife,
+            alive: true,
+        });
 
-            // Muzzle flash spark emission
-            emit(noseX, noseY, 2, 'spark', '255,220,100', {
-                speedMin: 35,
-                speedMax: 90,
-                sizeMin: 1.5,
-                sizeMax: 3.2,
-                lifeMin: 0.05,
-                lifeMax: 0.12,
-            });
-
-            // When current magazine empties, start strict 10s reload if magazines remain
-            if (player.ammoInMag <= 0) {
-                if (player.magsRemaining > 0) {
-                    player.reloading = true;
-                    player.reloadTimer = CONFIG.reloadDuration;
-                    player.magsRemaining--;
-                }
-            }
-        }
+        // Muzzle flash spark emission
+        emit(noseX, noseY, 2, 'spark', '255,220,100', {
+            speedMin: 35,
+            speedMax: 90,
+            sizeMin: 1.5,
+            sizeMax: 3.2,
+            lifeMin: 0.05,
+            lifeMax: 0.12,
+        });
     }
 
     // ── Fuel (Fuel does not deplete) ───────────────────
@@ -163,13 +146,13 @@ export function updatePlayer(player, dt, input) {
 
     // ── Cooldown Timers ─────────────────────────────────
     if (player.flareCooldown > 0) player.flareCooldown -= dt;
-    if (player.empCooldown > 0) player.empCooldown -= dt;
 
     player.trailTimer -= dt;
 }
 
 /**
- * Draw the fighter aircraft using affine transformations, panel detailing, and shadows.
+ * Draw the sleek aerodynamic fighter aircraft using bezier curves, panel detailing,
+ * canopy glass reflections, and neon afterburner glow.
  * 
  * @param {object} player
  * @param {CanvasRenderingContext2D} ctx
@@ -183,20 +166,61 @@ export function drawPlayer(player, ctx, screenPos) {
     const s = player.radius;
     const shadowOffset = CONFIG.altitudeShadowOffset;
 
+    // Helper: Build the sleek fighter airframe path using Bezier curves & supersonic contours
+    const buildAirframePath = (context) => {
+        context.beginPath();
+        // Needle Radome / Nose
+        context.moveTo(0, -s * 2.2);
+
+        // Port radome contour into LERX
+        context.bezierCurveTo(-s * 0.1, -s * 1.8, -s * 0.22, -s * 1.35, -s * 0.32, -s * 0.95);
+        context.bezierCurveTo(-s * 0.4, -s * 0.7, -s * 0.55, -s * 0.45, -s * 0.62, -s * 0.25);
+
+        // Port engine intake shoulder
+        context.lineTo(-s * 0.68, -s * 0.1);
+
+        // Port swept wing leading edge to wingtip
+        context.lineTo(-s * 1.65, s * 0.55);
+
+        // Wingtip missile launch rail
+        context.lineTo(-s * 1.65, s * 0.72);
+
+        // Wing trailing edge & aileron cutout
+        context.lineTo(-s * 1.48, s * 0.8);
+        context.lineTo(-s * 0.72, s * 0.72);
+
+        // Port engine nacelle flank & nozzle
+        context.lineTo(-s * 0.62, s * 1.15);
+        context.lineTo(-s * 0.22, s * 1.15);
+
+        // Twin-engine centerline stinger / beaver tail
+        context.bezierCurveTo(-s * 0.14, s * 0.95, -s * 0.08, s * 0.82, 0, s * 0.92);
+        context.bezierCurveTo(s * 0.08, s * 0.82, s * 0.14, s * 0.95, s * 0.22, s * 1.15);
+
+        // Starboard nozzle & nacelle flank
+        context.lineTo(s * 0.62, s * 1.15);
+        context.lineTo(s * 0.72, s * 0.72);
+
+        // Starboard wing trailing edge & wingtip rail
+        context.lineTo(s * 1.48, s * 0.8);
+        context.lineTo(s * 1.65, s * 0.72);
+        context.lineTo(s * 1.65, s * 0.55);
+
+        // Starboard engine intake shoulder
+        context.lineTo(s * 0.68, -s * 0.1);
+
+        // Starboard LERX into radome contour
+        context.bezierCurveTo(s * 0.55, -s * 0.45, s * 0.4, -s * 0.7, s * 0.32, -s * 0.95);
+        context.bezierCurveTo(s * 0.22, -s * 1.35, s * 0.1, -s * 1.8, 0, -s * 2.2);
+        context.closePath();
+    };
+
     // ── 1. Aircraft Altitude Drop Shadow ────────────────
     ctx.save();
     ctx.translate(screenPos.x + shadowOffset, screenPos.y + shadowOffset);
     ctx.rotate(player.heading + Math.PI / 2);
-    ctx.fillStyle = 'rgba(8, 12, 22, 0.35)';
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 1.6);
-    ctx.lineTo(-s * 1.25, s * 0.9);
-    ctx.lineTo(-s * 0.4, s * 0.7);
-    ctx.lineTo(-s * 0.45, s * 1.1);
-    ctx.lineTo(s * 0.45, s * 1.1);
-    ctx.lineTo(s * 0.4, s * 0.7);
-    ctx.lineTo(s * 1.25, s * 0.9);
-    ctx.closePath();
+    ctx.fillStyle = 'rgba(8, 14, 26, 0.38)';
+    buildAirframePath(ctx);
     ctx.fill();
     ctx.restore();
 
@@ -204,103 +228,180 @@ export function drawPlayer(player, ctx, screenPos) {
     ctx.translate(screenPos.x, screenPos.y);
     ctx.rotate(player.heading + Math.PI / 2);
 
-    // ── 3. Twin Afterburner Plumes (drawn beneath fuselage)
-    const exhaustLen = player.boosting ? s * (1.6 + Math.random() * 0.5) : s * 0.7;
-    const nozzleOffsets = [-s * 0.28, s * 0.28];
+    // ── 3. Twin Afterburner Plumes with Neon Glow ───────
+    const nozzleOffsets = [-s * 0.42, s * 0.42];
+    const exhaustLen = player.boosting
+        ? s * (2.1 + Math.random() * 0.5)
+        : s * (0.8 + Math.random() * 0.2);
 
     for (const nx of nozzleOffsets) {
-        // Outer flame envelope
-        ctx.beginPath();
-        ctx.moveTo(nx - s * 0.14, s * 0.85);
-        ctx.lineTo(nx, s * 0.85 + exhaustLen);
-        ctx.lineTo(nx + s * 0.14, s * 0.85);
-        ctx.fillStyle = player.boosting ? '#ff7700' : 'rgba(96, 213, 255, 0.6)';
-        ctx.fill();
+        ctx.save();
 
-        // Inner shock-diamond core
-        ctx.beginPath();
-        ctx.moveTo(nx - s * 0.08, s * 0.85);
-        ctx.lineTo(nx, s * 0.85 + exhaustLen * 0.6);
-        ctx.lineTo(nx + s * 0.08, s * 0.85);
-        ctx.fillStyle = player.boosting ? '#ffffff' : '#b0e5ff';
-        ctx.fill();
+        if (player.boosting) {
+            // High-energy supersonic afterburner glow (fiery neon orange)
+            ctx.shadowColor = '#ff6600';
+            ctx.shadowBlur = 24;
+
+            // Outer flame cone
+            const flameGrad = ctx.createLinearGradient(nx, s * 1.1, nx, s * 1.1 + exhaustLen);
+            flameGrad.addColorStop(0, '#ffffff');
+            flameGrad.addColorStop(0.2, '#ffdd33');
+            flameGrad.addColorStop(0.6, '#ff6600');
+            flameGrad.addColorStop(1, 'rgba(255, 30, 0, 0)');
+
+            ctx.fillStyle = flameGrad;
+            ctx.beginPath();
+            ctx.moveTo(nx - s * 0.18, s * 1.15);
+            ctx.lineTo(nx, s * 1.15 + exhaustLen);
+            ctx.lineTo(nx + s * 0.18, s * 1.15);
+            ctx.closePath();
+            ctx.fill();
+
+            // Mach shock diamonds along exhaust centerline
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = '#ffffff';
+            const diamondDist = [0.3, 0.6];
+            for (const d of diamondDist) {
+                const dy = s * 1.15 + exhaustLen * d;
+                const dw = s * 0.08;
+                const dh = s * 0.14;
+                ctx.beginPath();
+                ctx.moveTo(nx, dy - dh);
+                ctx.lineTo(nx + dw, dy);
+                ctx.lineTo(nx, dy + dh);
+                ctx.lineTo(nx - dw, dy);
+                ctx.closePath();
+                ctx.fill();
+            }
+        } else {
+            // Cruise afterburner glow (electric cyan neon)
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 14;
+
+            const cruiseGrad = ctx.createLinearGradient(nx, s * 1.1, nx, s * 1.1 + exhaustLen);
+            cruiseGrad.addColorStop(0, '#ffffff');
+            cruiseGrad.addColorStop(0.4, '#40d0ff');
+            cruiseGrad.addColorStop(1, 'rgba(0, 160, 255, 0)');
+
+            ctx.fillStyle = cruiseGrad;
+            ctx.beginPath();
+            ctx.moveTo(nx - s * 0.14, s * 1.15);
+            ctx.lineTo(nx, s * 1.15 + exhaustLen);
+            ctx.lineTo(nx + s * 0.14, s * 1.15);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        ctx.restore();
     }
 
-    // ── 4. Main Fuselage & Delta Wings ──────────────────
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 1.75);              // Needle Radome / Nose
-    ctx.lineTo(-s * 0.28, -s * 0.7);      // LERX (Leading Edge Extension)
-    ctx.lineTo(-s * 1.35, s * 0.65);      // Port wingtip
-    ctx.lineTo(-s * 1.25, s * 0.85);      // Port trailing edge
-    ctx.lineTo(-s * 0.55, s * 0.75);      // Engine nacelle port
-    ctx.lineTo(-s * 0.5, s * 0.98);       // Port nozzle
-    ctx.lineTo(0, s * 0.75);              // Beaver tail center
-    ctx.lineTo(s * 0.5, s * 0.98);        // Starboard nozzle
-    ctx.lineTo(s * 0.55, s * 0.75);       // Engine nacelle starboard
-    ctx.lineTo(s * 1.25, s * 0.85);       // Starboard trailing edge
-    ctx.lineTo(s * 1.35, s * 0.65);       // Starboard wingtip
-    ctx.lineTo(s * 0.28, -s * 0.7);       // Starboard LERX
-    ctx.closePath();
+    // ── 4. Main Fuselage & Aerodynamic Wings ────────────
+    buildAirframePath(ctx);
 
-    // High-tech military air-superiority gradient
-    const airframeGrad = ctx.createLinearGradient(0, -s * 1.75, 0, s * 1.0);
-    airframeGrad.addColorStop(0, '#5890b8');
-    airframeGrad.addColorStop(0.4, '#31587a');
-    airframeGrad.addColorStop(1, '#1b354e');
+    // Multi-stop military stealth air-superiority gradient
+    const airframeGrad = ctx.createLinearGradient(0, -s * 2.2, 0, s * 1.2);
+    airframeGrad.addColorStop(0, '#7aaad0');
+    airframeGrad.addColorStop(0.2, '#447094');
+    airframeGrad.addColorStop(0.55, '#224364');
+    airframeGrad.addColorStop(1, '#0e2035');
     ctx.fillStyle = airframeGrad;
     ctx.fill();
 
-    // Panel outlines
-    ctx.strokeStyle = 'rgba(160, 210, 255, 0.45)';
+    // High-tech panel edge highlight
+    ctx.strokeStyle = 'rgba(168, 218, 255, 0.5)';
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // ── 5. Twin Canted Vertical Stabilizers (Tail Fins) ──
-    ctx.fillStyle = '#213f5c';
+    // ── 5. Intake & Wing Flap Panel Detailing ───────────
+    ctx.strokeStyle = 'rgba(120, 185, 240, 0.35)';
+    ctx.lineWidth = 0.9;
     ctx.beginPath();
-    ctx.moveTo(-s * 0.35, s * 0.1);
-    ctx.lineTo(-s * 0.55, s * 0.85);
-    ctx.lineTo(-s * 0.32, s * 0.75);
-    ctx.moveTo(s * 0.35, s * 0.1);
-    ctx.lineTo(s * 0.55, s * 0.85);
-    ctx.lineTo(s * 0.32, s * 0.75);
+    // Port wing aileron hinge line
+    ctx.moveTo(-s * 0.72, s * 0.45);
+    ctx.lineTo(-s * 1.45, s * 0.65);
+    // Starboard wing aileron hinge line
+    ctx.moveTo(s * 0.72, s * 0.45);
+    ctx.lineTo(s * 1.45, s * 0.65);
+    // Center spine ridge
+    ctx.moveTo(0, -s * 0.1);
+    ctx.lineTo(0, s * 0.85);
+    ctx.stroke();
+
+    // Air Intake Cowlings
+    ctx.fillStyle = '#15293d';
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.58, -s * 0.1);
+    ctx.lineTo(-s * 0.38, -s * 0.1);
+    ctx.lineTo(-s * 0.35, s * 0.4);
+    ctx.lineTo(-s * 0.55, s * 0.4);
+    ctx.closePath();
+    ctx.moveTo(s * 0.58, -s * 0.1);
+    ctx.lineTo(s * 0.38, -s * 0.1);
+    ctx.lineTo(s * 0.35, s * 0.4);
+    ctx.lineTo(s * 0.55, s * 0.4);
+    ctx.closePath();
     ctx.fill();
 
-    // ── 6. Cockpit Canopy Glass ─────────────────────────
+    // ── 6. Twin Canted Vertical Stabilizers (Tail Fins) ──
+    ctx.fillStyle = '#1a334e';
     ctx.beginPath();
-    ctx.ellipse(0, -s * 0.55, s * 0.2, s * 0.55, 0, 0, Math.PI * 2);
+    // Port fin
+    ctx.moveTo(-s * 0.36, -s * 0.05);
+    ctx.lineTo(-s * 0.75, s * 0.98);
+    ctx.lineTo(-s * 0.42, s * 0.85);
+    ctx.closePath();
+    // Starboard fin
+    ctx.moveTo(s * 0.36, -s * 0.05);
+    ctx.lineTo(s * 0.75, s * 0.98);
+    ctx.lineTo(s * 0.42, s * 0.85);
+    ctx.closePath();
+    ctx.fill();
 
-    const canopyGrad = ctx.createLinearGradient(0, -s * 1.1, 0, 0);
-    canopyGrad.addColorStop(0, '#d8f2ff');
-    canopyGrad.addColorStop(0.5, '#40a0dc');
-    canopyGrad.addColorStop(1, '#123854');
+    ctx.strokeStyle = 'rgba(150, 205, 255, 0.45)';
+    ctx.stroke();
+
+    // ── 7. Cockpit Canopy Bubble Glass ───────────────────
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 1.45);
+    ctx.bezierCurveTo(-s * 0.22, -s * 1.15, -s * 0.26, -s * 0.65, -s * 0.18, -s * 0.15);
+    ctx.bezierCurveTo(-s * 0.10, s * 0.05, 0, s * 0.05, 0, s * 0.05);
+    ctx.bezierCurveTo(0, s * 0.05, s * 0.10, s * 0.05, s * 0.18, -s * 0.15);
+    ctx.bezierCurveTo(s * 0.26, -s * 0.65, s * 0.22, -s * 1.15, 0, -s * 1.45);
+    ctx.closePath();
+
+    const canopyGrad = ctx.createLinearGradient(0, -s * 1.45, 0, s * 0.05);
+    canopyGrad.addColorStop(0, '#eaf8ff');
+    canopyGrad.addColorStop(0.35, '#38bdf8');
+    canopyGrad.addColorStop(0.7, '#0284c7');
+    canopyGrad.addColorStop(1, '#072b45');
     ctx.fillStyle = canopyGrad;
     ctx.fill();
 
-    // Canopy glass specular glint
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    // Canopy Specular Glint Highlight
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, -s * 0.95);
-    ctx.lineTo(0, -s * 0.35);
+    ctx.moveTo(-s * 0.05, -s * 1.25);
+    ctx.bezierCurveTo(-s * 0.14, -s * 0.9, -s * 0.12, -s * 0.5, -s * 0.08, -s * 0.2);
     ctx.stroke();
 
-    // ── 7. Wingtip Formation Navigation Strobes ─────────
+    // ── 8. Wingtip Formation Navigation Strobes ─────────
     const navBlink = Math.sin(Date.now() / 180) > 0;
     if (navBlink) {
-        // Port wingtip: Aviation Red
+        // Port wingtip: Aviation Red with subtle neon glow
         ctx.fillStyle = '#ff2233';
         ctx.shadowColor = '#ff2233';
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.arc(-s * 1.32, s * 0.68, 2.5, 0, Math.PI * 2);
+        ctx.arc(-s * 1.62, s * 0.65, 2.5, 0, Math.PI * 2);
         ctx.fill();
 
-        // Starboard wingtip: Aviation Green
+        // Starboard wingtip: Aviation Green with subtle neon glow
         ctx.fillStyle = '#00ff66';
         ctx.shadowColor = '#00ff66';
         ctx.beginPath();
-        ctx.arc(s * 1.32, s * 0.68, 2.5, 0, Math.PI * 2);
+        ctx.arc(s * 1.62, s * 0.65, 2.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.shadowBlur = 0;
     }
@@ -309,7 +410,7 @@ export function drawPlayer(player, ctx, screenPos) {
 }
 
 /**
- * Draw machine gun tracer round.
+ * Draw machine gun tracer projectile with luminous neon glow.
  * 
  * @param {object} bullet
  * @param {CanvasRenderingContext2D} ctx
@@ -322,21 +423,21 @@ export function drawBullet(bullet, ctx, screenPos) {
     ctx.translate(screenPos.x, screenPos.y);
     ctx.rotate(bullet.heading);
 
-    // Luminous tracer streak glow
+    // Premium luminous tracer glow
     ctx.shadowColor = '#ffe066';
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = '#fff5cc';
+    ctx.shadowBlur = 12;
+    ctx.strokeStyle = '#fff8dd';
     ctx.lineWidth = 2.5;
 
     ctx.beginPath();
-    ctx.moveTo(-11, 0);
+    ctx.moveTo(-13, 0);
     ctx.lineTo(2, 0);
     ctx.stroke();
 
-    // Hot tracer incandescent tip
+    // Hot incandescent tracer warhead core
     ctx.fillStyle = '#ffcc00';
     ctx.beginPath();
-    ctx.arc(2, 0, 2.2, 0, Math.PI * 2);
+    ctx.arc(2, 0, 2.4, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
