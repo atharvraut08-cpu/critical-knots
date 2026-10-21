@@ -41,13 +41,15 @@ export function checkAllCollisions(state) {
         const m = missiles[i];
         if (!m.alive) continue;
 
-        if (circleCircle(player, m)) {
+        // Player's own missiles cannot hit player
+        if (m.source !== 'player' && circleCircle(player, m)) {
             player.alive = false;
             m.alive = false;
             spawnExplosion(player.x, player.y, true);
             spawnExplosion(m.x, m.y, false);
             if (state.phase === 'playing') {
                 state.phase = 'gameover';
+                state.dogfightResult = 'defeat';
                 state.stats.timeSurvived = state.timeAlive;
             }
             return;
@@ -63,22 +65,105 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 2. Missile ↔ Missile ────────────────────────────
-    for (let i = 0; i < missiles.length; i++) {
-        if (!missiles[i].alive) continue;
-        for (let j = i + 1; j < missiles.length; j++) {
-            if (!missiles[j].alive) continue;
+    // ── 2. Player ↔ Enemy Jet Mid-Air Collision ──────────
+    if (state.enemies && state.enemies.length > 0) {
+        for (let eIdx = 0; eIdx < state.enemies.length; eIdx++) {
+            const enemy = state.enemies[eIdx];
+            if (!enemy.alive) continue;
 
-            if (circleCircle(missiles[i], missiles[j])) {
-                missiles[i].alive = false;
-                missiles[j].alive = false;
-                state.stats.missilesDestroyed += 2;
-                spawnExplosion(missiles[i].x, missiles[i].y, false, true);
+            if (circleCircle(player, enemy)) {
+                player.alive = false;
+                enemy.alive = false;
+                spawnExplosion(player.x, player.y, true);
+                spawnExplosion(enemy.x, enemy.y, false, true);
+                applyShake(12);
+                if (state.phase === 'playing') {
+                    state.phase = 'gameover';
+                    state.dogfightResult = 'defeat';
+                    state.stats.timeSurvived = state.timeAlive;
+                }
+                return;
             }
         }
     }
 
-    // ── 3. Missile ↔ Flare Impact ───────────────────────
+    // ── 3. Player-Fired Missile ↔ Enemy Jet ──────────────
+    if (state.enemies && state.enemies.length > 0) {
+        for (let eIdx = 0; eIdx < state.enemies.length; eIdx++) {
+            const enemy = state.enemies[eIdx];
+            if (!enemy.alive) continue;
+
+            for (let mIdx = 0; mIdx < missiles.length; mIdx++) {
+                const m = missiles[mIdx];
+                if (!m.alive || m.source !== 'player') continue;
+
+                if (circleCircle(enemy, m)) {
+                    m.alive = false;
+                    enemy.alive = false;
+                    state.stats.missilesDestroyed++;
+                    state.stats.enemiesDestroyed++;
+                    spawnExplosion(enemy.x, enemy.y, false, true);
+                    applyShake(10);
+                    break;
+                }
+            }
+        }
+    }
+
+    // ── 4. Bullet ↔ Enemy Jet Impact ────────────────────
+    const bullets = state.bullets;
+    if (bullets && bullets.length > 0 && state.enemies && state.enemies.length > 0) {
+        for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
+            const b = bullets[bIdx];
+            if (!b.alive) continue;
+
+            for (let eIdx = 0; eIdx < state.enemies.length; eIdx++) {
+                const enemy = state.enemies[eIdx];
+                if (!enemy.alive) continue;
+
+                if (circleCircle(b, enemy)) {
+                    b.alive = false;
+                    enemy.health -= 25;
+                    emit(b.x, b.y, 4, 'spark', '255,200,80', {
+                        speedMin: 20,
+                        speedMax: 80,
+                        sizeMin: 1.5,
+                        sizeMax: 3.5,
+                        lifeMin: 0.1,
+                        lifeMax: 0.25,
+                    });
+                    if (enemy.health <= 0) {
+                        enemy.alive = false;
+                        state.stats.enemiesDestroyed++;
+                        spawnExplosion(enemy.x, enemy.y, false, true);
+                        applyShake(10);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // ── 5. Missile ↔ Missile ────────────────────────────
+    // Disabled by default via CONFIG.enableMissileToMissileCollisions to prevent vanishing in clusters
+    if (CONFIG.enableMissileToMissileCollisions) {
+        for (let i = 0; i < missiles.length; i++) {
+            if (!missiles[i].alive) continue;
+            for (let j = i + 1; j < missiles.length; j++) {
+                if (!missiles[j].alive) continue;
+
+                if (circleCircle(missiles[i], missiles[j])) {
+                    missiles[i].alive = false;
+                    missiles[j].alive = false;
+                    state.stats.missilesDestroyed += 2;
+                    spawnExplosion(missiles[i].x, missiles[i].y, false, true);
+                    spawnExplosion(missiles[j].x, missiles[j].y, false, true);
+                }
+            }
+        }
+    }
+
+    // ── 6. Missile ↔ Flare Impact ───────────────────────
     for (let i = 0; i < missiles.length; i++) {
         const m = missiles[i];
         if (!m.alive) continue;
@@ -98,8 +183,7 @@ export function checkAllCollisions(state) {
         }
     }
 
-    // ── 4. Bullet ↔ Missile Impact ──────────────────────
-    const bullets = state.bullets;
+    // ── 7. Bullet ↔ Missile Impact ──────────────────────
     if (bullets && bullets.length > 0) {
         for (let bIdx = 0; bIdx < bullets.length; bIdx++) {
             const b = bullets[bIdx];
@@ -118,6 +202,16 @@ export function checkAllCollisions(state) {
                     break;
                 }
             }
+        }
+    }
+
+    // ── 8. Dogfight Mode Victory Evaluation ─────────────
+    if (state.gameMode === 'dogfight' && state.phase === 'playing') {
+        const allEnemiesDestroyed = state.enemies.length > 0 && state.enemies.every(e => !e.alive);
+        if (allEnemiesDestroyed && player.alive) {
+            state.phase = 'gameover';
+            state.dogfightResult = 'victory';
+            state.stats.timeSurvived = state.timeAlive;
         }
     }
 }

@@ -6,25 +6,60 @@
  */
 
 export const CONFIG = {
-    // ── Player & Flight Aerodynamics ───────────────────
+    // ── Player & Flight Aerodynamics (Newtonian Physics) ─
     playerBaseSpeed: 220,       // px/s cruise speed
-    playerTurnRate: 2.2,        // rad/s
+    playerTurnRate: 3.1,        // rad/s (+40% agile turn rate for dogfighting maneuverability)
     playerRadius: 14,           // collision radius
     boostMultiplier: 1.6,       // speed × this while boosting (352 px/s)
     boostFuelDrainMultiplier: 2.5, // fuel drain × this while boosting
-    turnDragDecel: 175,         // px/s² speed bleed while banking (induced drag)
-    minTurnSpeedFactor: 0.60,   // speed floor while turning (60% of top speed)
+    turnDragDecel: 130,         // px/s² speed bleed while banking (induced drag)
+    minTurnSpeedFactor: 0.70,   // speed floor while turning (70% of top speed)
     planeAccelRate: 150,        // px/s² straight-line acceleration back up to cruise
     planeBoostAccelRate: 280,   // px/s² acceleration while boosting
     boostDecelRate: 135,        // px/s² smooth deceleration (momentum/drag) on releasing boost
+
+    // Newtonian Aerodynamics & Drift
+    thrustCruise: 450,          // px/s² engine forward thrust at cruise
+    thrustBoost: 1152,          // px/s² engine forward thrust with afterburner
+    dragCoeff: 0.0093,          // quadratic aerodynamic drag coeff: F_d = C_d * v^2
+    lateralGrip: 3.8,           // s⁻¹ lateral restoring force pulling velocity vector to nose heading
+    dashImpulse: 320,           // px/s sudden burst of lateral vector force (double-tap roll)
+    dashCooldown: 0.75,         // seconds cooldown between lateral dashes
 
     // ── Guns & Ammo System ──────────────────────────────
     gunFireRate: 0.075,         // seconds between shots (~13.3 rounds/sec)
     bulletSpeed: 950,           // px/s muzzle velocity
     bulletLife: 1.1,            // seconds before despawning (~1045px range)
     bulletRadius: 3.5,          // collision radius, px
+    bulletDragCoeff: 0.0018,    // high aerodynamic drag coefficient for bullets
     maxAmmo: 500,               // single hard-capped pool of 500 rounds total
     totalBullets: 500,          // total ammo supply
+
+    // ── Dogfight Mode Parameters ────────────────────────
+    dogfightLockTime: 0.5,      // exactly 0.5 seconds required to establish lock (reduced from 2.5s)
+    playerLockConeAngle: 15 * Math.PI / 180, // 15-degree nose cone for player
+    playerLockCosThreshold: Math.cos(15 * Math.PI / 180), // dot product threshold (~0.9659)
+    playerDogfightMissiles: 6,  // strict limit of 6 missiles for player in dogfight mode
+    enemyLockConeAngle: 30 * Math.PI / 180,  // 30-degree nose cone for AI
+    enemyLockCosThreshold: Math.cos(30 * Math.PI / 180), // dot product threshold (~0.8660)
+    enemyMissiles: 8,           // finite payload: 8 heat-seeking missiles per AI jet
+    enemyFlares: 3,             // finite payload: 3 flares per AI jet
+    enemyBaseSpeed: 175,        // px/s reduced cruise speed for enemy jet (gives player position advantage)
+    enemyTurnRate: 1.30,        // rad/s reduced turn rate for enemy jet (player can easily out-turn)
+    enemyRadius: 15,            // collision radius
+    enemyFlareCriticalRadius: 280, // Euclidean distance check to pop defensive flare
+    enemyLeadDistance: 350,     // px: threshold where AI uses Lead Pursuit (>350) vs Lag Pursuit (<=350)
+    enemyLagOffset: 240,        // px: offset behind player's tail during Lag Pursuit
+
+    // ── Missile Physics & Proportional Navigation ────────
+    missileBoostDuration: 3.0,  // seconds of high-thrust engine boost
+    missileBoostAccel: 280,     // px/s² high acceleration during boost phase
+    missileCoastDrag: 0.00035,  // gentle aerodynamic glide drag coeff after engine cutoff
+    missilePnGain: 3.5,         // Proportional Navigation guidance constant N (dTheta/dt = N * dLambda/dt)
+    missileStallSpeed: 0,       // px/s stall threshold (lowered to zero to prevent speed-based deletion)
+    missileMaxLifetime: 30.0,   // seconds max flight duration before self-destruct (increased to 30s)
+    missileCullMargin: 2000,    // px outside camera viewport before entity cleanup
+    enableMissileToMissileCollisions: false, // disabled to prevent missiles from vanishing in clusters
 
     // ── Fuel ────────────────────────────────────────────
     maxFuel: 100,
@@ -32,77 +67,108 @@ export const CONFIG = {
     fuelCanisterRefill: 30,
     fuelFloorForBoost: 5,       // boost silently disabled below this
 
-    // ── Missiles ────────────────────────────────────────
+    // ── Missiles & Phased Difficulty Tuning ────────────
     warmupTime: 3.5,            // seconds before first missile
-    spawnIntervalStart: 3.2,    // seconds between spawns at t=0
-    spawnIntervalFloor: 0.75,   // minimum spawn interval
-    spawnIntervalHalfLife: 22,  // interval halves every N seconds of survival
+    phase1Interval: 2.6,        // Phase 1 (0 to 30s): steady cadence
+    phase2Interval: 2.0,        // Phase 2 (30 to 60s): moderate cadence
+    phase3BaseInterval: 1.8,    // Phase 3 (60s+): starting cooldown before exponential decay
+    phase3HalfLife: 16,         // Phase 3 cooldown halves every N seconds
+    spawnIntervalFloor: 0.45,   // minimum spawn interval floor
+    spawnIntervalStart: 2.6,    // baseline start interval
     spawnRingMargin: 200,       // spawn this far beyond camera cull radius
     minSpawnDistFromPlayer: 450,// never spawn closer than this to player
 
     // Missile Archetypes:
-    // - standard (Sidewinder): balanced heatseeker, matches cruise speed
-    // - heavy (Titan): slow, high agility/turn-rate, thick smoke, large explosion
-    // - fast (Falcon): 295 px/s, faster than player cruise speed (220)
-    // - hyper (Viper): 385 px/s, faster than player boost (352), high inertia
+    // Sleek, high-thrust projectiles (significantly faster than player's 352 px/s boost)
     missileTypes: {
-        standard: {
-            name: 'Sidewinder',
-            baseSpeed: 215,
-            maxSpeed: 235,
-            accel: 55,
-            turnRate: 1.25,
-            radius: 8,
-            color: '#ff3344',
-            hudDot: '#ff4455',
-            smokeColor: '200,200,210',
-            trailRate: 0.025,
+        basic: {
+            name: 'Basic',
+            baseSpeed: 290,             // high muzzle launch speed
+            maxSpeed: 430,              // 430 px/s (significantly higher than player max boost 352 px/s)
+            accel: 95,
+            turnRate: 1.60,             // agile tracking
+            radius: 4,                  // slim, realistic missile radius
+            color: '#94a3b8',           // grey
+            hudDot: '#94a3b8',
+            smokeColor: '180,185,195',
+            trailRate: 0.024,
+            shadowColor: '#94a3b8',
         },
         heavy: {
-            name: 'Titan',
-            baseSpeed: 130,
-            maxSpeed: 155,
-            accel: 30,
-            turnRate: 1.85,
-            radius: 12,
-            color: '#cc1122',
-            hudDot: '#ff2233',
-            smokeColor: '70,70,80',
+            name: 'Heavy',
+            baseSpeed: 235,             // steady standoff launch
+            maxSpeed: 390,              // 390 px/s (higher than player max boost 352 px/s)
+            accel: 80,
+            turnRate: 2.3,              // very sharp turn rate (high tracking)
+            radius: 5,                  // slim, realistic heavy missile radius
+            color: '#ff7700',           // orange
+            hudDot: '#ff8800',
+            smokeColor: '255,140,50',
             trailRate: 0.018,
+            shadowColor: '#ff7700',
+        },
+        interceptor: {
+            name: 'Interceptor',
+            baseSpeed: 460,             // supersonic dart rocket
+            maxSpeed: 550,              // 550 px/s (extreme standoff intercept speed)
+            accel: 220,
+            turnRate: 0,                // zero turn rate (straight line rocket)
+            radius: 3.5,                // slim needle dart rocket radius
+            color: '#ff1122',           // bright red
+            hudDot: '#ff2233',
+            smokeColor: '255,60,60',
+            trailRate: 0.012,
+            shadowColor: '#ff1122',
+        },
+        // Aliases for compatibility
+        standard: {
+            name: 'Basic',
+            baseSpeed: 290,
+            maxSpeed: 430,
+            accel: 95,
+            turnRate: 1.60,
+            radius: 4,
+            color: '#94a3b8',
+            hudDot: '#94a3b8',
+            smokeColor: '180,185,195',
+            trailRate: 0.024,
+            shadowColor: '#94a3b8',
         },
         fast: {
-            name: 'Falcon',
-            baseSpeed: 250,
-            maxSpeed: 295,
-            accel: 90,
-            turnRate: 0.85,
-            radius: 7,
-            color: '#ff7700',
-            hudDot: '#ff9900',
-            smokeColor: '230,170,100',
-            trailRate: 0.02,
+            name: 'Interceptor',
+            baseSpeed: 460,
+            maxSpeed: 550,
+            accel: 220,
+            turnRate: 0,
+            radius: 3.5,
+            color: '#ff1122',
+            hudDot: '#ff2233',
+            smokeColor: '255,60,60',
+            trailRate: 0.012,
+            shadowColor: '#ff1122',
         },
         hyper: {
-            name: 'Viper',
-            baseSpeed: 280,
-            maxSpeed: 385,
-            accel: 135,
-            turnRate: 0.42,
-            radius: 6,
-            color: '#e022ff',
-            hudDot: '#f033ff',
-            smokeColor: '200,120,255',
-            trailRate: 0.015,
+            name: 'Interceptor',
+            baseSpeed: 460,
+            maxSpeed: 550,
+            accel: 220,
+            turnRate: 0,
+            radius: 3.5,
+            color: '#ff1122',
+            hudDot: '#ff2233',
+            smokeColor: '255,60,60',
+            trailRate: 0.012,
+            shadowColor: '#ff1122',
         },
     },
 
     // Legacy fallbacks
-    homingSpeed: 215,
-    homingTurnRate: 1.25,
-    homingRadius: 8,
+    homingSpeed: 290,
+    homingTurnRate: 1.60,
+    homingRadius: 4,
     rocketSpeed: 295,
     rocketTurnRate: 0,
-    rocketRadius: 7,
+    rocketRadius: 3.5,
 
     // ── Countermeasures: Flares ─────────────────────────
     maxFlares: 5,               // 5 static flares per run (no regeneration)
@@ -122,7 +188,7 @@ export const CONFIG = {
 
     // ── Camera ──────────────────────────────────────────
     cameraFollowSpeed: 4.0,     // lerp factor
-    cameraCullFactor: 1.5,      // cull entities beyond this × screen diagonal
+    cameraCullFactor: 3.5,      // expanded cull factor so entities within 2000+ px margin are tracked
     shakeDecayRate: 8.0,        // shake magnitude decay per second
     shakeMaxMagnitude: 12,      // max shake offset in px
 

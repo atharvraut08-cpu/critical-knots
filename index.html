@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Skyfall Evasion — 2D Missile Survival Game</title>
     <meta name="description" content="Skyfall Evasion: A 2D top-down missile-survival arcade game built with HTML5 Canvas and vanilla JavaScript. Dodge heat-seeking missiles, deploy flares and EMPs, and survive as long as you can.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -13,20 +16,21 @@
         }
 
         body {
-            background: #0a0a1e;
+            background: #070b16;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             overflow: hidden;
-            font-family: 'Segoe UI', Arial, sans-serif;
+            font-family: 'Outfit', 'Segoe UI', Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         #gameCanvas {
             display: block;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
-            cursor: none;
+            image-rendering: auto;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.7);
         }
 
         #mobileWarning {

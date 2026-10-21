@@ -26,7 +26,7 @@ export function updateCountermeasures(state, dt, input) {
 
     // ── Input Triggers ──────────────────────────────────
     if (consumeAction('flare') && player.flares > 0 && player.flareCooldown <= 0) {
-        activateFlares(state, player);
+        deployFlareSalvo(player, state, false);
     }
 
     // ── Update Active Physical Flares ────────────────────
@@ -91,13 +91,19 @@ export function updateCountermeasures(state, dt, input) {
 /**
  * Launch a realistic physical multi-flare burst salvo (8 to 12 flares).
  * Flares fan out backward and outward in a wide arc from the aircraft tail.
+ * Usable by both player and enemy AI jets.
+ * 
+ * @param {object} entity - player or enemy jet
+ * @param {object} state - global game state
+ * @param {boolean} isEnemy
  */
-function activateFlares(state, player) {
-    player.flares--;
-    player.flareCooldown = CONFIG.flareCooldown;
+export function deployFlareSalvo(entity, state, isEnemy = false) {
+    if (entity.flares <= 0) return;
+    entity.flares--;
+    entity.flareCooldown = isEnemy ? 1.8 : CONFIG.flareCooldown;
 
     const count = CONFIG.flareBurstCount || 10;
-    const baseBackAngle = player.heading + Math.PI;
+    const baseBackAngle = entity.heading + Math.PI;
     const maxSpread = CONFIG.flareSpreadAngle || 1.25; // ~72 deg spread each side
 
     for (let i = 0; i < count; i++) {
@@ -109,13 +115,14 @@ function activateFlares(state, player) {
         const ejectSpeed = randRange(CONFIG.flareMinSpeed || 140, CONFIG.flareMaxSpeed || 240);
 
         // Aircraft momentum + wide lateral/rearward ejection velocity vector
-        const vx = Math.cos(player.heading) * (player.speed * 0.35) + Math.cos(flareAngle) * ejectSpeed;
-        const vy = Math.sin(player.heading) * (player.speed * 0.35) + Math.sin(flareAngle) * ejectSpeed;
+        const forwardSpeed = entity.speed || CONFIG.playerBaseSpeed;
+        const vx = Math.cos(entity.heading) * (forwardSpeed * 0.35) + Math.cos(flareAngle) * ejectSpeed;
+        const vy = Math.sin(entity.heading) * (forwardSpeed * 0.35) + Math.sin(flareAngle) * ejectSpeed;
 
         state.flares.push({
             id: Math.random(),
-            x: player.x - Math.cos(player.heading) * (player.radius * 0.8),
-            y: player.y - Math.sin(player.heading) * (player.radius * 0.8),
+            x: entity.x - Math.cos(entity.heading) * (entity.radius * 0.8),
+            y: entity.y - Math.sin(entity.heading) * (entity.radius * 0.8),
             vx,
             vy,
             life: CONFIG.flareBurnDuration * randRange(0.85, 1.15),
@@ -129,7 +136,7 @@ function activateFlares(state, player) {
     }
 
     // Magnesium salvo ignition flash & burst sparks
-    emit(player.x, player.y, 25, 'spark', '255,255,210', {
+    emit(entity.x, entity.y, 25, 'spark', '255,255,210', {
         speedMin: 50,
         speedMax: 180,
         sizeMin: 2.5,
@@ -137,7 +144,7 @@ function activateFlares(state, player) {
         lifeMin: 0.1,
         lifeMax: 0.28,
     });
-    emit(player.x, player.y, 8, 'explosion', '255,200,100', {
+    emit(entity.x, entity.y, 8, 'explosion', '255,200,100', {
         speedMin: 25,
         speedMax: 80,
         sizeMin: 4,
