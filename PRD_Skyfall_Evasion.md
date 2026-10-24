@@ -1,5 +1,5 @@
 # Product Requirements Document
-## "Skyfall Evasion" — A 2D Top-Down Missile Survival Game
+## "Critical Knots" — A 2D Top-Down Missile Survival Game
 ### TE INFT Computer Graphics Academic Project — v2.0
 
 ---
@@ -8,7 +8,7 @@
 
 | Field | Value |
 |---|---|
-| Project | Skyfall Evasion |
+| Project | Critical Knots |
 | Course | Computer Graphics, TE INFT Sem V |
 | Stack | HTML5 Canvas + Vanilla JavaScript (no engine, no physics lib) |
 | Version | 2.0 (strengthened from v1.0 draft) |
@@ -20,7 +20,7 @@
 
 ## 1. Project Overview & Academic Focus
 
-**Skyfall Evasion** is a browser-based 2D top-down arcade survival game — a "Missiles!" clone — in which the player pilots a plane that flies continuously forward while heat-seeking missiles spawn and pursue it. The player survives by steering, using countermeasures, and exploiting terrain to make missiles collide with obstacles or each other.
+**Critical Knots** is a browser-based 2D top-down arcade survival game — a "Missiles!" clone — in which the player pilots a plane that flies continuously forward while heat-seeking missiles spawn and pursue it. The player survives by steering, using countermeasures, and exploiting terrain to make missiles collide with obstacles or each other.
 
 The project is built entirely with **HTML5 Canvas + Vanilla JavaScript**, with no game engine or physics library, so that every core computer graphics concept is implemented and demonstrable by hand. The gameplay is the vehicle; the graphics math is the deliverable, and the codebase must be legible enough to defend line-by-line in a viva.
 

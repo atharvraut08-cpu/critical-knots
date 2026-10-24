@@ -6,7 +6,7 @@ Guidance for Claude Code (or any AI coding agent) working in this repository. Re
 
 ## 1. Project Summary
 
-**Skyfall Evasion** — a 2D top-down missile-survival arcade game ("Missiles!" clone) built for a Computer Graphics academic project (TE INFT, Sem V). Player pilots a plane that flies continuously forward while heat-seeking missiles spawn and pursue it.
+**Critical Knots** — a 2D top-down missile-survival arcade game ("Missiles!" clone) built for a Computer Graphics academic project (TE INFT, Sem V). Player pilots a plane that flies continuously forward while heat-seeking missiles spawn and pursue it.
 
 **Hard constraint, non-negotiable:** HTML5 Canvas + vanilla JavaScript only. No game engine (no Phaser, PixiJS, Three.js, Matter.js), no physics library, no rendering framework. Every core mechanic — vector math, transforms, collision, particles — must be hand-implemented, because the implementation *is* the graded deliverable. If a task seems easier with a library, that ease is the wrong signal here — implement it by hand instead.
 

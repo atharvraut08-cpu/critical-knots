@@ -125,8 +125,14 @@ export function drawTitleScreen(ctx, w, h, state) {
     ctx.shadowColor = '#60d5ff';
     ctx.shadowBlur = 24;
     ctx.fillStyle = '#60d5ff';
-    ctx.font = '900 44px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('SKYFALL EVASION', w / 2, 72);
+    ctx.font = '900 44px "Outfit", "Segoe UI", Arial, sans-serif';
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '3px';
+    }
+    ctx.fillText('CRITICAL KNOTS', w / 2, 72);
+    if ('letterSpacing' in ctx) {
+        ctx.letterSpacing = '0px';
+    }
     ctx.shadowBlur = 0;
 
     // Subtitle
@@ -386,7 +392,7 @@ export function drawTitleScreen(ctx, w, h, state) {
     // Academic project credit
     ctx.fillStyle = '#475569';
     ctx.font = '11px "Segoe UI", Arial, sans-serif';
-    ctx.fillText('TE INFT — Computer Graphics Project  •  Skyfall Evasion Newtonian Engine', w / 2, h - 16);
+    ctx.fillText('TE INFT — Computer Graphics Project  •  Critical Knots Newtonian Engine', w / 2, h - 16);
 }
 
 /**

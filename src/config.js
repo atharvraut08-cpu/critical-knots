@@ -6,6 +6,9 @@
  */
 
 export const CONFIG = {
+    // ── Metadata & Game Info ────────────────────────────
+    gameTitle: 'Critical Knots',
+
     // ── Player & Flight Aerodynamics (Newtonian Physics) ─
     playerBaseSpeed: 220,       // px/s cruise speed
     playerTurnRate: 3.1,        // rad/s (+40% agile turn rate for dogfighting maneuverability)
