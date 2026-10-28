@@ -21,6 +21,7 @@ import { emit } from './particle.js';
 import { createMissile } from './missile.js';
 import { createBullet } from './bullet.js';
 import { consumeAction } from '../input.js';
+import { getPlayerSprite, isPlayerSpriteReady } from '../render/playerSprite.js';
 
 /**
  * Create a new player entity at world origin.
@@ -332,8 +333,15 @@ export function updatePlayer(player, dt, input) {
 }
 
 /**
- * Draw the sleek aerodynamic fighter aircraft using bezier curves, panel detailing,
- * canopy glass reflections, and neon afterburner glow.
+ * Draw the compact military stealth fighter (approved F-22 Raptor design).
+ * Uses the approved compact, transparent-background top-down sprite with
+ * metallic grey body, symmetrical swept wings, dark cockpit, red/green wingtip lights,
+ * subtle twin blue engine exhausts, and dynamic afterburner boost effects.
+ * 
+ * CG Concepts:
+ * - Affine transformations: translate to world->screen position, rotate to heading, 3D perspective scale
+ * - Sprite blitting & compositing: subpixel antialiased raster rendering with alpha blending
+ * - Procedural vector effects: twin blue reheat ion glow & supersonic afterburner shock diamonds
  * 
  * @param {object} player
  * @param {CanvasRenderingContext2D} ctx
@@ -344,58 +352,7 @@ export function drawPlayer(player, ctx, screenPos) {
 
     ctx.save();
 
-    const s = player.radius;
-
-    // Helper: Build the sleek fighter airframe path using Bezier curves & supersonic contours
-    const buildAirframePath = (context) => {
-        context.beginPath();
-        // Needle Radome / Nose
-        context.moveTo(0, -s * 2.2);
-
-        // Port radome contour into LERX
-        context.bezierCurveTo(-s * 0.1, -s * 1.8, -s * 0.22, -s * 1.35, -s * 0.32, -s * 0.95);
-        context.bezierCurveTo(-s * 0.4, -s * 0.7, -s * 0.55, -s * 0.45, -s * 0.62, -s * 0.25);
-
-        // Port engine intake shoulder
-        context.lineTo(-s * 0.68, -s * 0.1);
-
-        // Port swept wing leading edge to wingtip
-        context.lineTo(-s * 1.65, s * 0.55);
-
-        // Wingtip missile launch rail
-        context.lineTo(-s * 1.65, s * 0.72);
-
-        // Wing trailing edge & aileron cutout
-        context.lineTo(-s * 1.48, s * 0.8);
-        context.lineTo(-s * 0.72, s * 0.72);
-
-        // Port engine nacelle flank & nozzle
-        context.lineTo(-s * 0.62, s * 1.15);
-        context.lineTo(-s * 0.22, s * 1.15);
-
-        // Twin-engine centerline stinger / beaver tail
-        context.bezierCurveTo(-s * 0.14, s * 0.95, -s * 0.08, s * 0.82, 0, s * 0.92);
-        context.bezierCurveTo(s * 0.08, s * 0.82, s * 0.14, s * 0.95, s * 0.22, s * 1.15);
-
-        // Starboard nozzle & nacelle flank
-        context.lineTo(s * 0.62, s * 1.15);
-        context.lineTo(s * 0.72, s * 0.72);
-
-        // Starboard wing trailing edge & wingtip rail
-        context.lineTo(s * 1.48, s * 0.8);
-        context.lineTo(s * 1.65, s * 0.72);
-        context.lineTo(s * 1.65, s * 0.55);
-
-        // Starboard engine intake shoulder
-        context.lineTo(s * 0.68, -s * 0.1);
-
-        // Starboard LERX into radome contour
-        context.bezierCurveTo(s * 0.55, -s * 0.45, s * 0.4, -s * 0.7, s * 0.32, -s * 0.95);
-        context.bezierCurveTo(s * 0.22, -s * 1.35, s * 0.1, -s * 1.8, 0, -s * 2.2);
-        context.closePath();
-    };
-
-    // ── Fighter Airframe Transform ───────────────────
+    // ── 1. Fighter Airframe Transform ───────────────────
     ctx.translate(screenPos.x, screenPos.y);
     ctx.rotate(player.heading + Math.PI / 2);
 
@@ -411,157 +368,116 @@ export function drawPlayer(player, ctx, screenPos) {
         ctx.scale(0.90, 1.0);
     }
 
-    // ── 3. Twin Exhaust Plumes (Clean Vector Flames, Zero Neon Glow) ──
-    const nozzleOffsets = [-s * 0.42, s * 0.42];
-    const exhaustLen = player.boosting
-        ? s * (1.3 + Math.random() * 0.3)
-        : s * (0.6 + Math.random() * 0.15);
+    const s = player.radius;
+    // Compact proportions matching approved reference image
+    // Base radius = 14px -> drawHeight ≈ 52px, drawWidth ≈ 45px
+    const drawHeight = s * 3.7;
+    const drawWidth = drawHeight * (138 / 161);
+    const pivotY = -drawHeight * 0.48; // nose at pivotY, center of mass at origin
 
-    for (const nx of nozzleOffsets) {
+    const now = Date.now();
+
+    // ── 2. Twin Engine Exhaust Plumes (Layered Behind Airframe) ──
+    const nozzleOffsets = [-drawWidth * 0.085, drawWidth * 0.085];
+    const nozzleY = pivotY + drawHeight * 0.92;
+    const nozzleW = drawWidth * 0.045;
+
+    for (let i = 0; i < 2; i++) {
+        const nx = nozzleOffsets[i];
+
         if (player.boosting) {
-            // Crisp supersonic afterburner flame
-            ctx.fillStyle = '#f97316';
+            // Supersonic Afterburner: roaring dual plumes with supersonic shock diamonds
+            const plumeLen = s * (1.5 + Math.sin(now / 40 + i) * 0.15);
+
+            // Radiant reheat bloom around nozzle exit
+            const bloom = ctx.createRadialGradient(nx, nozzleY, 0, nx, nozzleY + s * 0.4, s * 1.0);
+            bloom.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
+            bloom.addColorStop(0.5, 'rgba(234, 88, 12, 0.18)');
+            bloom.addColorStop(1, 'rgba(234, 88, 12, 0)');
+            ctx.fillStyle = bloom;
             ctx.beginPath();
-            ctx.moveTo(nx - s * 0.16, s * 1.15);
-            ctx.lineTo(nx, s * 1.15 + exhaustLen);
-            ctx.lineTo(nx + s * 0.16, s * 1.15);
-            ctx.closePath();
+            ctx.arc(nx, nozzleY + s * 0.35, s * 1.0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Inner hot core
-            ctx.fillStyle = '#fef08a';
+            // Outer supersonic flame envelope (Orange/Amber)
             ctx.beginPath();
-            ctx.moveTo(nx - s * 0.08, s * 1.15);
-            ctx.lineTo(nx, s * 1.15 + exhaustLen * 0.5);
-            ctx.lineTo(nx + s * 0.08, s * 1.15);
+            ctx.moveTo(nx - nozzleW, nozzleY);
+            ctx.lineTo(nx - nozzleW * 1.1, nozzleY + plumeLen * 0.4);
+            ctx.lineTo(nx, nozzleY + plumeLen);
+            ctx.lineTo(nx + nozzleW * 1.1, nozzleY + plumeLen * 0.4);
+            ctx.lineTo(nx + nozzleW, nozzleY);
             ctx.closePath();
+            const gradOuter = ctx.createLinearGradient(nx, nozzleY, nx, nozzleY + plumeLen);
+            gradOuter.addColorStop(0, '#fdba74');
+            gradOuter.addColorStop(0.2, '#f97316');
+            gradOuter.addColorStop(0.7, '#ea580c');
+            gradOuter.addColorStop(1, 'rgba(194, 65, 12, 0)');
+            ctx.fillStyle = gradOuter;
             ctx.fill();
-        } else {
-            // Subtle cruise exhaust flame
-            ctx.fillStyle = '#38bdf8';
+
+            // Intermediate incandescent core (Bright Yellow)
+            const midLen = plumeLen * 0.65;
             ctx.beginPath();
-            ctx.moveTo(nx - s * 0.12, s * 1.15);
-            ctx.lineTo(nx, s * 1.15 + exhaustLen);
-            ctx.lineTo(nx + s * 0.12, s * 1.15);
+            ctx.moveTo(nx - nozzleW * 0.65, nozzleY);
+            ctx.lineTo(nx, nozzleY + midLen);
+            ctx.lineTo(nx + nozzleW * 0.65, nozzleY);
             ctx.closePath();
+            const gradMid = ctx.createLinearGradient(nx, nozzleY, nx, nozzleY + midLen);
+            gradMid.addColorStop(0, '#ffffff');
+            gradMid.addColorStop(0.4, '#fef08a');
+            gradMid.addColorStop(0.8, '#facc15');
+            gradMid.addColorStop(1, 'rgba(234, 179, 8, 0)');
+            ctx.fillStyle = gradMid;
+            ctx.fill();
+
+            // Supersonic Shock Diamonds (diamonds along plume centerline)
+            for (const dFrac of [0.30, 0.58]) {
+                const dy = nozzleY + plumeLen * dFrac;
+                const dw = nozzleW * (0.45 - dFrac * 0.15);
+                const dh = s * 0.12;
+                ctx.beginPath();
+                ctx.moveTo(nx, dy - dh);
+                ctx.lineTo(nx + dw, dy);
+                ctx.lineTo(nx, dy + dh);
+                ctx.lineTo(nx - dw, dy);
+                ctx.closePath();
+                ctx.fillStyle = dFrac < 0.5 ? '#ffffff' : '#fef08a';
+                ctx.fill();
+            }
+        } else {
+            // Normal cruise flight: subtle twin blue engine exhaust glow matching approved design
+            const flameLen = s * (0.55 + Math.sin(now / 90 + i) * 0.08);
+
+            // Subtle ambient blue reheat glow
+            const glow = ctx.createRadialGradient(nx, nozzleY, 0, nx, nozzleY + s * 0.25, s * 0.65);
+            glow.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+            glow.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(nx, nozzleY + s * 0.2, s * 0.65, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Subtle twin blue exhaust cone
+            ctx.beginPath();
+            ctx.moveTo(nx - nozzleW * 0.8, nozzleY);
+            ctx.lineTo(nx, nozzleY + flameLen);
+            ctx.lineTo(nx + nozzleW * 0.8, nozzleY);
+            ctx.closePath();
+            const gradCruise = ctx.createLinearGradient(nx, nozzleY, nx, nozzleY + flameLen);
+            gradCruise.addColorStop(0, '#e0f2fe');
+            gradCruise.addColorStop(0.3, '#38bdf8');
+            gradCruise.addColorStop(1, 'rgba(2, 132, 199, 0)');
+            ctx.fillStyle = gradCruise;
             ctx.fill();
         }
     }
 
-    // ── 4. Main Fuselage & Aerodynamic Wings (Solid Matte Steel Blue) ──
-    buildAirframePath(ctx);
-    ctx.fillStyle = '#334e68'; // Solid realistic matte steel blue
-    ctx.fill();
-
-    // Matte Wing Panel Tone
-    ctx.fillStyle = '#486581';
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.68, -s * 0.1);
-    ctx.lineTo(-s * 1.65, s * 0.55);
-    ctx.lineTo(-s * 1.65, s * 0.72);
-    ctx.lineTo(-s * 1.48, s * 0.8);
-    ctx.lineTo(-s * 0.72, s * 0.72);
-    ctx.closePath();
-    ctx.moveTo(s * 0.68, -s * 0.1);
-    ctx.lineTo(s * 1.65, s * 0.55);
-    ctx.lineTo(s * 1.65, s * 0.72);
-    ctx.lineTo(s * 1.48, s * 0.8);
-    ctx.lineTo(s * 0.72, s * 0.72);
-    ctx.closePath();
-    ctx.fill();
-
-    // Crisp Vector Airframe Outlines (Zero shadowBlur, Zero shadowColor)
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.3;
-    buildAirframePath(ctx);
-    ctx.stroke();
-
-    // ── 5. Intake & Wing Flap Panel Detailing ───────────
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 0.9;
-    ctx.beginPath();
-    // Port wing aileron hinge line
-    ctx.moveTo(-s * 0.72, s * 0.45);
-    ctx.lineTo(-s * 1.45, s * 0.65);
-    // Starboard wing aileron hinge line
-    ctx.moveTo(s * 0.72, s * 0.45);
-    ctx.lineTo(s * 1.45, s * 0.65);
-    // Center spine ridge
-    ctx.moveTo(0, -s * 0.1);
-    ctx.lineTo(0, s * 0.85);
-    ctx.stroke();
-
-    // Air Intake Cowlings
-    ctx.fillStyle = '#102a43';
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.58, -s * 0.1);
-    ctx.lineTo(-s * 0.38, -s * 0.1);
-    ctx.lineTo(-s * 0.35, s * 0.4);
-    ctx.lineTo(-s * 0.55, s * 0.4);
-    ctx.closePath();
-    ctx.moveTo(s * 0.58, -s * 0.1);
-    ctx.lineTo(s * 0.38, -s * 0.1);
-    ctx.lineTo(s * 0.35, s * 0.4);
-    ctx.lineTo(s * 0.55, s * 0.4);
-    ctx.closePath();
-    ctx.fill();
-
-    // ── 6. Twin Vertical Stabilizers (Tail Fins) ────────
-    ctx.fillStyle = '#243b53';
-    ctx.beginPath();
-    // Port fin
-    ctx.moveTo(-s * 0.36, -s * 0.05);
-    ctx.lineTo(-s * 0.75, s * 0.98);
-    ctx.lineTo(-s * 0.42, s * 0.85);
-    ctx.closePath();
-    // Starboard fin
-    ctx.moveTo(s * 0.36, -s * 0.05);
-    ctx.lineTo(s * 0.75, s * 0.98);
-    ctx.lineTo(s * 0.42, s * 0.85);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // ── 7. Cockpit Canopy Glass (Solid Matte Aviator Glass) ──
-    ctx.beginPath();
-    ctx.moveTo(0, -s * 1.45);
-    ctx.bezierCurveTo(-s * 0.22, -s * 1.15, -s * 0.26, -s * 0.65, -s * 0.18, -s * 0.15);
-    ctx.bezierCurveTo(-s * 0.10, s * 0.05, 0, s * 0.05, 0, s * 0.05);
-    ctx.bezierCurveTo(0, s * 0.05, s * 0.10, s * 0.05, s * 0.18, -s * 0.15);
-    ctx.bezierCurveTo(s * 0.26, -s * 0.65, s * 0.22, -s * 1.15, 0, -s * 1.45);
-    ctx.closePath();
-    ctx.fillStyle = '#0284c7'; // Clean tinted cockpit glass
-    ctx.fill();
-
-    ctx.strokeStyle = '#0c4a6e';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Canopy Specular Glint Highlight
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-s * 0.05, -s * 1.25);
-    ctx.bezierCurveTo(-s * 0.14, -s * 0.9, -s * 0.12, -s * 0.5, -s * 0.08, -s * 0.2);
-    ctx.stroke();
-
-    // ── 8. Wingtip Formation Navigation Strobes ─────────
-    const navBlink = Math.sin(Date.now() / 180) > 0;
-    if (navBlink) {
-        // Port wingtip: Aviation Red (clean vector dot, no shadowBlur)
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(-s * 1.62, s * 0.65, 2, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Starboard wingtip: Aviation Green (clean vector dot, no shadowBlur)
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.arc(s * 1.62, s * 0.65, 2, 0, Math.PI * 2);
-        ctx.fill();
+    // ── 3. Approved Compact F-22 Stealth Fighter Sprite ─────────────────
+    if (isPlayerSpriteReady()) {
+        ctx.drawImage(getPlayerSprite(), -drawWidth / 2, pivotY, drawWidth, drawHeight);
+    } else {
+        // Procedural vector fallback if sprite is loading
+        drawProceduralF22Fallback(ctx, drawWidth, drawHeight, pivotY);
     }
 
     ctx.restore();
@@ -570,6 +486,54 @@ export function drawPlayer(player, ctx, screenPos) {
     if (state && state.gameMode === 'flightschool') {
         drawFlightVectors(player, ctx, screenPos);
     }
+}
+
+/**
+ * Procedural vector airframe fallback (ensures immediate rendering even before asset load).
+ */
+function drawProceduralF22Fallback(ctx, w, h, topY) {
+    const hw = w / 2;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, topY);
+    ctx.lineTo(-hw * 0.25, topY + h * 0.12);
+    ctx.lineTo(-hw * 0.45, topY + h * 0.35);
+    ctx.lineTo(-hw, topY + h * 0.65);
+    ctx.lineTo(-hw, topY + h * 0.72);
+    ctx.lineTo(-hw * 0.42, topY + h * 0.82);
+    ctx.lineTo(-hw * 0.28, topY + h);
+    ctx.lineTo(0, topY + h * 0.95);
+    ctx.lineTo(hw * 0.28, topY + h);
+    ctx.lineTo(hw * 0.42, topY + h * 0.82);
+    ctx.lineTo(hw, topY + h * 0.72);
+    ctx.lineTo(hw, topY + h * 0.65);
+    ctx.lineTo(hw * 0.45, topY + h * 0.35);
+    ctx.lineTo(hw * 0.25, topY + h * 0.12);
+    ctx.closePath();
+
+    const grad = ctx.createLinearGradient(0, topY, 0, topY + h);
+    grad.addColorStop(0, '#333e4f');
+    grad.addColorStop(0.5, '#28313f');
+    grad.addColorStop(1, '#1a202c');
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Cockpit
+    ctx.beginPath();
+    ctx.moveTo(0, topY + h * 0.18);
+    ctx.lineTo(-hw * 0.12, topY + h * 0.38);
+    ctx.lineTo(0, topY + h * 0.44);
+    ctx.lineTo(hw * 0.12, topY + h * 0.38);
+    ctx.closePath();
+    ctx.fillStyle = '#0f172a';
+    ctx.fill();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    ctx.restore();
 }
 
 /**
