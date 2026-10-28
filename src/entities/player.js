@@ -333,15 +333,16 @@ export function updatePlayer(player, dt, input) {
 }
 
 /**
- * Draw the compact military stealth fighter (approved F-22 Raptor design).
- * Uses the approved compact, transparent-background top-down sprite with
- * metallic grey body, symmetrical swept wings, dark cockpit, red/green wingtip lights,
- * subtle twin blue engine exhausts, and dynamic afterburner boost effects.
+ * Draw the high-resolution military stealth fighter (F-22 Raptor).
+ * Uses a native 512x612 high-resolution, transparent-background top-down sprite
+ * matching the approved reference design (metallic dark-grey body, glossy bright-blue canopy,
+ * blue wing accents, and vivid cyan engine exhausts), with high-quality scaling,
+ * dynamic afterburner boost effects, and 3D banking scale.
  * 
  * CG Concepts:
  * - Affine transformations: translate to world->screen position, rotate to heading, 3D perspective scale
- * - Sprite blitting & compositing: subpixel antialiased raster rendering with alpha blending
- * - Procedural vector effects: twin blue reheat ion glow & supersonic afterburner shock diamonds
+ * - Sprite blitting & compositing: high-quality antialiased raster rendering with alpha blending
+ * - Procedural vector effects: dynamic afterburner boost flames & supersonic shock diamonds
  * 
  * @param {object} player
  * @param {CanvasRenderingContext2D} ctx
@@ -369,17 +370,17 @@ export function drawPlayer(player, ctx, screenPos) {
     }
 
     const s = player.radius;
-    // Compact proportions matching approved reference image
-    // Base radius = 14px -> drawHeight ≈ 52px, drawWidth ≈ 45px
-    const drawHeight = s * 3.7;
-    const drawWidth = drawHeight * (138 / 161);
-    const pivotY = -drawHeight * 0.48; // nose at pivotY, center of mass at origin
+    // High-resolution sprite scaling: 512x612 aspect ratio (W/H = 0.8366)
+    // Compact, crisp gameplay sizing (airframe length ≈ 49px, span ≈ 58px)
+    const drawHeight = s * 5.0; // 70px total including exhaust flames
+    const drawWidth = drawHeight * (512 / 612); // ~58.6px
+    const pivotY = -drawHeight * 0.425; // -29.7px: nose at -29.7px, nozzles at +19.2px, center of mass at origin
 
     const now = Date.now();
 
-    // ── 2. Twin Engine Exhaust Plumes (Layered Behind Airframe) ──
-    const nozzleOffsets = [-drawWidth * 0.085, drawWidth * 0.085];
-    const nozzleY = pivotY + drawHeight * 0.92;
+    // ── 2. Dynamic Engine Exhaust & Boost Plumes (Layered Behind Airframe) ──
+    const nozzleOffsets = [-drawWidth * 0.082, drawWidth * 0.082];
+    const nozzleY = pivotY + drawHeight * 0.699; // +19.2px from center
     const nozzleW = drawWidth * 0.045;
 
     for (let i = 0; i < 2; i++) {
@@ -387,16 +388,16 @@ export function drawPlayer(player, ctx, screenPos) {
 
         if (player.boosting) {
             // Supersonic Afterburner: roaring dual plumes with supersonic shock diamonds
-            const plumeLen = s * (1.5 + Math.sin(now / 40 + i) * 0.15);
+            const plumeLen = s * (1.6 + Math.sin(now / 40 + i) * 0.15);
 
             // Radiant reheat bloom around nozzle exit
-            const bloom = ctx.createRadialGradient(nx, nozzleY, 0, nx, nozzleY + s * 0.4, s * 1.0);
-            bloom.addColorStop(0, 'rgba(249, 115, 22, 0.45)');
-            bloom.addColorStop(0.5, 'rgba(234, 88, 12, 0.18)');
+            const bloom = ctx.createRadialGradient(nx, nozzleY, 0, nx, nozzleY + s * 0.4, s * 1.1);
+            bloom.addColorStop(0, 'rgba(249, 115, 22, 0.5)');
+            bloom.addColorStop(0.5, 'rgba(234, 88, 12, 0.2)');
             bloom.addColorStop(1, 'rgba(234, 88, 12, 0)');
             ctx.fillStyle = bloom;
             ctx.beginPath();
-            ctx.arc(nx, nozzleY + s * 0.35, s * 1.0, 0, Math.PI * 2);
+            ctx.arc(nx, nozzleY + s * 0.35, s * 1.1, 0, Math.PI * 2);
             ctx.fill();
 
             // Outer supersonic flame envelope (Orange/Amber)
@@ -445,35 +446,21 @@ export function drawPlayer(player, ctx, screenPos) {
                 ctx.fill();
             }
         } else {
-            // Normal cruise flight: subtle twin blue engine exhaust glow matching approved design
-            const flameLen = s * (0.55 + Math.sin(now / 90 + i) * 0.08);
-
-            // Subtle ambient blue reheat glow
-            const glow = ctx.createRadialGradient(nx, nozzleY, 0, nx, nozzleY + s * 0.25, s * 0.65);
-            glow.addColorStop(0, 'rgba(56, 189, 248, 0.45)');
+            // Normal cruise flight: subtle ambient cyan reheat glow behind the vivid engine exhausts
+            const glow = ctx.createRadialGradient(nx, nozzleY + s * 0.3, 0, nx, nozzleY + s * 0.3, s * 0.6);
+            glow.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
             glow.addColorStop(1, 'rgba(56, 189, 248, 0)');
             ctx.fillStyle = glow;
             ctx.beginPath();
-            ctx.arc(nx, nozzleY + s * 0.2, s * 0.65, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Subtle twin blue exhaust cone
-            ctx.beginPath();
-            ctx.moveTo(nx - nozzleW * 0.8, nozzleY);
-            ctx.lineTo(nx, nozzleY + flameLen);
-            ctx.lineTo(nx + nozzleW * 0.8, nozzleY);
-            ctx.closePath();
-            const gradCruise = ctx.createLinearGradient(nx, nozzleY, nx, nozzleY + flameLen);
-            gradCruise.addColorStop(0, '#e0f2fe');
-            gradCruise.addColorStop(0.3, '#38bdf8');
-            gradCruise.addColorStop(1, 'rgba(2, 132, 199, 0)');
-            ctx.fillStyle = gradCruise;
+            ctx.arc(nx, nozzleY + s * 0.3, s * 0.6, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
-    // ── 3. Approved Compact F-22 Stealth Fighter Sprite ─────────────────
+    // ── 3. High-Resolution F-22 Stealth Fighter Sprite ─────────────────
     if (isPlayerSpriteReady()) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(getPlayerSprite(), -drawWidth / 2, pivotY, drawWidth, drawHeight);
     } else {
         // Procedural vector fallback if sprite is loading
