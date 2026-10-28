@@ -1,0 +1,22 @@
+# Operating System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE & Editor folders
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+
+# Local scripts & temp files
+scratch/
+*.pyc
+__pycache__/
+
+# Environment & credentials (safety net)
+.env
+.env.*
+*.log
+

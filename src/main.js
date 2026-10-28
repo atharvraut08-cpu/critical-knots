@@ -45,7 +45,6 @@ let lastTime = 0;
 let gameOverCooldown = 0;
 
 function init() {
-    console.log(`[${CONFIG.gameTitle || 'Critical Knots'}] Engine initialized.`);
     checkMobileDevice();
 
     initInput(canvas);
