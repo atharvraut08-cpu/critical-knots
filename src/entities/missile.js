@@ -24,28 +24,40 @@ import { emit } from './particle.js';
  * @param {number} y - spawn world Y
  * @param {number} heading - initial heading angle (radians)
  * @param {'basic'|'heavy'|'interceptor'} type - missile archetype
+ * @param {'enemy'|'player'} source - firing entity type
+ * @param {object|null} target - target entity
+ * @param {number} [speedMultiplier=1.0] - optional velocity multiplier (e.g. for Survival mode balancing)
  * @returns {object} missile entity
  */
-export function createMissile(x, y, heading, type = 'basic', source = 'enemy', target = null) {
+export function createMissile(x, y, heading, type = 'basic', source = 'enemy', target = null, speedMultiplier = 1.0) {
     let t = String(type).toLowerCase();
     if (t === 'standard' || t === 'homing') t = 'basic';
     if (t === 'fast' || t === 'rocket' || t === 'hyper') t = 'interceptor';
 
     const def = CONFIG.missileTypes[t] || CONFIG.missileTypes.basic;
 
+    let actualSource = source;
+    let mult = 1.0;
+    if (typeof speedMultiplier === 'number' && speedMultiplier > 0) {
+        mult = speedMultiplier;
+    } else if (typeof source === 'number' && source > 0) {
+        mult = source;
+        actualSource = 'enemy';
+    }
+
     return {
         x,
         y,
         heading,
-        speed: def.baseSpeed,
-        maxSpeed: def.maxSpeed,
+        speed: Math.round(def.baseSpeed * mult),
+        maxSpeed: Math.round(def.maxSpeed * mult),
         accel: def.accel,
         turnRate: def.turnRate,
         baseTurnRate: def.turnRate,
         type: t,
         radius: def.radius,
         alive: true,
-        source,                  // 'enemy' | 'player'
+        source: actualSource,    // 'enemy' | 'player'
         target,                  // targeted entity (player or EnemyJet)
 
         // ── 3-Second Boost Phase vs Coast Phase ─────────

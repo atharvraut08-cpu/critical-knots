@@ -345,7 +345,6 @@ export function drawPlayer(player, ctx, screenPos) {
     ctx.save();
 
     const s = player.radius;
-    const shadowOffset = CONFIG.altitudeShadowOffset;
 
     // Helper: Build the sleek fighter airframe path using Bezier curves & supersonic contours
     const buildAirframePath = (context) => {
@@ -396,16 +395,7 @@ export function drawPlayer(player, ctx, screenPos) {
         context.closePath();
     };
 
-    // ── 1. Aircraft Altitude Drop Shadow ────────────────
-    ctx.save();
-    ctx.translate(screenPos.x + shadowOffset, screenPos.y + shadowOffset);
-    ctx.rotate(player.heading + Math.PI / 2);
-    ctx.fillStyle = 'rgba(8, 14, 26, 0.38)';
-    buildAirframePath(ctx);
-    ctx.fill();
-    ctx.restore();
-
-    // ── 2. Fighter Airframe Transform ───────────────────
+    // ── Fighter Airframe Transform ───────────────────
     ctx.translate(screenPos.x, screenPos.y);
     ctx.rotate(player.heading + Math.PI / 2);
 

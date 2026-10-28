@@ -81,6 +81,14 @@ export const CONFIG = {
     spawnRingMargin: 200,       // spawn this far beyond camera cull radius
     minSpawnDistFromPlayer: 450,// never spawn closer than this to player
 
+    // ── Survival Mode Threat Balancing ──────────────────
+    // Reduces missile velocity by ~12% (10–15% range) exclusively in Survival mode
+    // giving the player an improved reaction and dodge window without sacrificing tension.
+    // - Basic:       255 base / 378 max px/s (was 290 / 430 px/s, -12.1%)
+    // - Heavy:       207 base / 343 max px/s (was 235 / 390 px/s, -11.9% / -12.1%)
+    // - Interceptor: 405 base / 484 max px/s (was 460 / 550 px/s, -12.0%)
+    survivalMissileSpeedMultiplier: 0.88,
+
     // Missile Archetypes:
     // Sleek, high-thrust projectiles (significantly faster than player's 352 px/s boost)
     missileTypes: {

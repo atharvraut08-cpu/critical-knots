@@ -121,8 +121,9 @@ function spawnMissile(state, player, canvasW, canvasH) {
     // Initial heading roughly directed at the player
     const heading = angleTo({ x, y }, player) + randRange(-0.25, 0.25);
     const type = getMissileArchetype(state.timeAlive);
+    const speedMult = CONFIG.survivalMissileSpeedMultiplier !== undefined ? CONFIG.survivalMissileSpeedMultiplier : 0.88;
 
-    state.missiles.push(createMissile(x, y, heading, type));
+    state.missiles.push(createMissile(x, y, heading, type, 'enemy', player, speedMult));
 }
 
 
